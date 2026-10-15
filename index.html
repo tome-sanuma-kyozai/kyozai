@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>教材購入 申込書</title>
+<style>
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: #f4f5f7; color: #1f2328; font-size: 17px; line-height: 1.7;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; text-align: center; margin: 8px 0 16px; }
+  h2 { font-size: 19px; margin: 0 0 12px; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .lead { font-size: 18px; margin: 0; }
+  .student { font-size: 19px; font-weight: bold; margin: 0 0 8px; }
+  .items { list-style: none; margin: 8px 0; padding: 0; border-top: 1px solid #e3e5e8; }
+  .items li { border-bottom: 1px solid #e3e5e8; }
+  .items label { display: flex; align-items: center; gap: 12px; padding: 12px 0; cursor: pointer; }
+  .items .name { flex: 1; }
+  .items .price { white-space: nowrap; }
+  .items.off { opacity: .45; }
+  input[type=checkbox], input[type=radio] { width: 24px; height: 24px; flex: none; margin: 0; }
+  .total { font-size: 19px; text-align: right; margin: 12px 0; }
+  .pay { background: #f0f6ff; border-radius: 8px; padding: 10px 12px; }
+  fieldset { border: 0; margin: 0 0 16px; padding: 0; }
+  legend { font-weight: bold; margin-bottom: 8px; }
+  .choice { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #c9ced6;
+    border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+  .field-label { display: block; font-weight: bold; margin-bottom: 6px; }
+  input[type=text] { width: 100%; font-size: 18px; padding: 12px; border: 1px solid #c9ced6; border-radius: 8px; }
+  .error { color: #b3261e; font-weight: bold; margin: 12px 0 0; }
+  button { display: block; width: 100%; margin-top: 16px; padding: 16px; font-size: 19px; font-weight: bold;
+    color: #fff; background: #1a73e8; border: 0; border-radius: 10px; cursor: pointer; }
+  button:disabled { background: #9aa0a6; cursor: default; }
+  .small { font-size: 16px; color: #3c4043; }
+  .small p { margin: 0 0 10px; }
+  footer { text-align: center; font-size: 16px; color: #3c4043; padding: 8px 0 24px; }
+  footer p { margin: 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>教材購入 申込書</h1>
+
+<section id="loading" class="card"><p class="lead">読み込んでいます…</p></section>
+<section id="message" class="card" hidden>
+  <p class="lead" id="message-text"></p>
+  <button id="retry" type="button" hidden onclick="location.reload()">もう一度読み込む</button>
+</section>
+
+<form id="form" novalidate hidden>
+  <section class="card">
+    <p class="student" id="student"></p>
+    <p>教室からおすすめする教材です。購入しない教材は、チェックを外してください。</p>
+    <ul class="items" id="items"></ul>
+    <p class="total">合計 <strong id="count">0</strong>冊　<strong id="total">0円</strong></p>
+    <p class="pay">お支払い：<strong id="withdraw"></strong>に、ご登録の口座から引き落としいたします。</p>
+    <p>ノートはご自身でご用意ください。</p>
+  </section>
+
+  <section class="card">
+    <fieldset>
+      <legend>お申し込み</legend>
+      <label class="choice"><input type="radio" name="decision" value="申し込む">申し込みます</label>
+      <label class="choice"><input type="radio" name="decision" value="申し込まない">今回は申し込まない</label>
+    </fieldset>
+    <label class="field-label" for="parentName">保護者のお名前</label>
+    <input id="parentName" type="text" maxlength="30" autocomplete="name">
+    <p id="error" class="error" role="alert" hidden></p>
+    <button id="submit" type="submit">送信する</button>
+  </section>
+
+  <section class="card small">
+    <p>変更・取り消しは塾生アプリのメッセージでご連絡ください。発注後は取り消せません。</p>
+    <p>＊ご提示いただいた個人情報は、下記のように使用させて頂いております。<br>
+      （１）学習指導、記録指導、学習状況のご報告、進路相談、集計・管理、ご請求に関する事務処理など明光義塾のサービス提供のため<br>
+      （２）上の（１）の利用目的の達成の範囲での、明光義塾本部への提供のため。</p>
+    <p>お申込内容は、教室が利用するGoogleのサービスに保存します。</p>
+  </section>
+</form>
+
+<section id="receipt" class="card" hidden></section>
+
+<footer id="footer" hidden>
+  <p id="cls-name"></p>
+  <p id="cls-address"></p>
+  <p id="cls-tel"></p>
+</footer>
+</main>
+
+<script>
+// 申込のデータを読み書きする Apps Script の Webアプリの URL（「デプロイを管理」のウェブアプリの URL、…/exec）
+var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ugfm8M1lO7Xel7R20J7S7Pyb4GjHFhwgIKBXtuJd7qjU/exec';
+
+(function () {
+  var YES = '申し込む';
+  var NO = '申し込まない';
+  var MSG_BAD_LINK = 'このリンクは使えません。教室にお問い合わせください。';
+  var MSG_UNAVAILABLE = 'ただいま表示できません。時間をおいて、もう一度お開きください。';
+  var MSG_NETWORK = '通信できませんでした。電波のよいところで、もう一度「送信する」を押してください。';
+
+  // Logic.gs の extractRequestId と同じ規則
+  function extractRequestId(raw) {
+    if (raw === null || raw === undefined) return null;
+    var s = String(raw)
+      .replace(/[！-～]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); })
+      .replace(/[‐-―−ーｰ]/g, '-');
+    var m = /([ABCDT])-([abcdefghjkmnpqrstuvwxyz23456789]{10})/i.exec(s);
+    if (!m) return null;
+    return m[1].toUpperCase() + '-' + m[2].toLowerCase();
+  }
+  function safeDecode(s) {
+    try { return decodeURIComponent(String(s).replace(/\+/g, ' ')); } catch (e) { return String(s); }
+  }
+  function yen(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '円';
+  }
+  function $(id) { return document.getElementById(id); }
+  function add(parent, tag, text, cls) {
+    var e = document.createElement(tag);
+    if (text !== undefined && text !== null) e.textContent = text;
+    if (cls) e.className = cls;
+    parent.appendChild(e);
+    return e;
+  }
+  function showOnly(id) {
+    var ids = ['loading', 'message', 'form', 'receipt'];
+    for (var i = 0; i < ids.length; i++) $(ids[i]).hidden = ids[i] !== id;
+  }
+  function showMessage(text, canRetry) {
+    $('message-text').textContent = text;
+    $('retry').hidden = !canRetry;
+    showOnly('message');
+  }
+  // サーバーの言葉が日本語の文でなければ（'badrequest' など）、決まった文にする
+  function japaneseError(msg) {
+    if (typeof msg === 'string' && /[ぁ-んァ-ヶ一-龠]/.test(msg)) return msg;
+    return '送信できませんでした。もう一度お試しください。';
+  }
+  function showFooter(cls) {
+    if (!cls) return;
+    $('cls-name').textContent = cls.name || '';
+    $('cls-address').textContent = cls.address || '';
+    $('cls-tel').textContent = cls.tel ? '電話 ' + cls.tel : '';
+    $('footer').hidden = false;
+  }
+  // 時間がかかりすぎたらあきらめる fetch（Cookie は送らない）
+  function call(url, opts, timeoutMs) {
+    opts = opts || {};
+    opts.credentials = 'omit';
+    opts.redirect = 'follow';
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    if (ctrl) opts.signal = ctrl.signal;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 30000) : null;
+    return fetch(url, opts).then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }, function (err) {
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
+
+  // 控え（受け付けた内容）。文字は textContent で入れる
+  function renderReceipt(r, already) {
+    var box = $('receipt');
+    while (box.firstChild) box.removeChild(box.firstChild);
+    var title;
+    if (already) title = 'このお申し込みは受付済みです';
+    else if (r.decision === YES) title = 'お申し込みを受け付けました';
+    else title = '「今回は申し込まない」で受け付けました';
+    add(box, 'h2', title);
+    add(box, 'p', r.student + ' 様', 'student');
+    if (r.decision === YES) {
+      add(box, 'p', 'お申し込みの教材');
+      var ul = add(box, 'ul', null, 'items');
+      for (var i = 0; i < r.items.length; i++) {
+        var lb = add(add(ul, 'li'), 'label');
+        add(lb, 'span', r.items[i].name, 'name');
+        add(lb, 'span', r.items[i].priceLabel, 'price');
+      }
+      add(box, 'p', '合計 ' + r.count + '冊　' + r.totalLabel, 'total');
+      add(box, 'p', 'お支払い：' + r.withdrawLabel + 'に、ご登録の口座から引き落としいたします。', 'pay');
+    } else {
+      add(box, 'p', '今回は、教材のお申し込みはありません。');
+    }
+    if (r.appliedAtLabel) add(box, 'p', '受付日時：' + r.appliedAtLabel);
+    add(box, 'p', 'この画面が控えです。必要なときは画面を保存してください。', 'small');
+    add(box, 'p', '変更・取り消しは塾生アプリのメッセージでご連絡ください。発注後は取り消せません。', 'small');
+    showOnly('receipt');
+    window.scrollTo(0, 0);
+  }
+
+  // 申込画面
+  function renderForm(id, f) {
+    var form = $('form');
+    var list = $('items');
+    $('student').textContent = f.student + ' 様' + (f.grade ? '（' + f.grade + '）' : '');
+    $('withdraw').textContent = f.withdrawLabel;
+    for (var i = 0; i < f.items.length; i++) {
+      var it = f.items[i];
+      var lb = add(add(list, 'li'), 'label');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'item';
+      cb.value = it.code;
+      cb.setAttribute('data-price', String(Number(it.price) || 0));
+      cb.checked = it.checked !== false;
+      lb.appendChild(cb);
+      add(lb, 'span', it.name, 'name');
+      add(lb, 'span', it.priceLabel, 'price');
+    }
+    var boxes = Array.prototype.slice.call(form.querySelectorAll('input.item'));
+    var radios = Array.prototype.slice.call(form.querySelectorAll('input[name=decision]'));
+    var nameInput = $('parentName');
+    var errorBox = $('error');
+    var button = $('submit');
+
+    function decision() {
+      for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i].value;
+      return '';
+    }
+    function selectedCodes() {
+      var s = [];
+      for (var i = 0; i < boxes.length; i++) if (boxes[i].checked) s.push(boxes[i].value);
+      return s;
+    }
+    function update() {
+      var no = decision() === NO;
+      var count = 0;
+      var total = 0;
+      for (var i = 0; i < boxes.length; i++) {
+        boxes[i].disabled = no;
+        if (!no && boxes[i].checked) {
+          count += 1;
+          total += Number(boxes[i].getAttribute('data-price')) || 0;
+        }
+      }
+      list.className = no ? 'items off' : 'items';
+      $('count').textContent = String(count);
+      $('total').textContent = yen(total);
+    }
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.hidden = false;
+    }
+    function ready() {
+      button.disabled = false;
+      button.textContent = '送信する';
+    }
+    for (var j = 0; j < boxes.length; j++) boxes[j].addEventListener('change', update);
+    for (var k = 0; k < radios.length; k++) radios[k].addEventListener('change', update);
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (button.disabled) return;
+      errorBox.hidden = true;
+      var d = decision();
+      var name = nameInput.value.replace(/^\s+|\s+$/g, '');
+      var sel = d === YES ? selectedCodes() : [];
+      if (d !== YES && d !== NO) return showError('申し込むか、申し込まないかを選んでください');
+      if (name === '') return showError('保護者名を入力してください');
+      if (name.length > 30) return showError('保護者名は30文字までです');
+      if (d === YES && sel.length === 0) return showError('教材を1冊以上選んでください');
+
+      button.disabled = true;
+      button.textContent = '送信しています…';
+      call(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // preflight を起こさない
+        body: JSON.stringify({ api: 'submit', id: id, decision: d, parentName: name, selected: sel })
+      }, 60000).then(function (res) { // 送信は鍵待ち・書きこみがあるので長めに待つ
+        if (res && res.ok) {
+          renderReceipt(res.receipt, false);
+        } else if (res && res.receipt) {
+          renderReceipt(res.receipt, true);
+        } else {
+          showError(japaneseError(res && res.error));
+          ready();
+        }
+      }, function () {
+        showError(MSG_NETWORK);
+        ready();
+      });
+    });
+
+    update();
+    showOnly('form');
+  }
+
+  // はじめ：URL の id を整えて読み込む
+  var params = typeof URLSearchParams === 'function' ? new URLSearchParams(location.search) : null;
+  var raw = params ? params.get('id') : null;
+  var id = extractRequestId(raw) || extractRequestId(safeDecode(location.search + location.hash));
+  if (!id) {
+    showMessage(MSG_BAD_LINK);
+    return;
+  }
+  call(API_URL + '?api=get&id=' + encodeURIComponent(id), { method: 'GET' }).then(function (res) {
+    if (!res || !res.ok) {
+      if (res && res.error === 'notfound') showMessage(MSG_BAD_LINK, false);
+      else showMessage(MSG_UNAVAILABLE, true);
+      return;
+    }
+    showFooter(res.cls);
+    if (res.status === 'open' && res.form) renderForm(res.id || id, res.form);
+    else if (res.receipt) renderReceipt(res.receipt, true);
+    else showMessage(MSG_UNAVAILABLE, true);
+  }, function () {
+    showMessage(MSG_UNAVAILABLE, true);
+  });
+})();
+</script>
+</body>
+</html>
