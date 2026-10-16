@@ -23,6 +23,9 @@
   .items .name { flex: 1; }
   .items .price { white-space: nowrap; }
   .items.off { opacity: .45; }
+  /* 文は「。」「、」の切れ目で折り返す（言葉の途中で切れないように）。対応しているブラウザは文節でも折り返す */
+  .s { display: inline-block; max-width: 100%; }
+  body { word-break: auto-phrase; }
   .group { font-size: 18px; margin: 18px 0 2px; padding-left: 10px; border-left: 5px solid; }
   .group.req { color: #8c1d18; border-color: #c5221f; }
   .group.rec { color: #174ea6; border-color: #1a73e8; }
@@ -74,7 +77,7 @@
       <ul class="items" id="items-rec"></ul>
     </div>
     <p class="total">合計 <strong id="count">0</strong>冊　<strong id="total">0円</strong></p>
-    <p class="pay">お支払い：<strong id="withdraw"></strong>に、ご登録の口座から引き落としいたします。</p>
+    <p class="pay"><span class="s">お支払い：<strong id="withdraw"></strong>に</span><br><span class="s">ご登録の口座から引き落としいたします。</span></p>
     <p>ノートはご自身でご用意ください。</p>
   </section>
 
@@ -137,19 +140,41 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
     return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '円';
   }
   function $(id) { return document.getElementById(id); }
+  // 文を「。」「、」のところで区切り、区切りごとに折り返す（言葉の途中で切れないように）。文字は textContent で入れる
+  function setText(el, text) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var parts = String(text).replace(/([。、])/g, '$1\u0000').split('\u0000');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var s = document.createElement('span');
+      s.className = 's';
+      s.textContent = parts[i];
+      el.appendChild(s);
+    }
+  }
   function add(parent, tag, text, cls) {
     var e = document.createElement(tag);
-    if (text !== undefined && text !== null) e.textContent = text;
+    if (text !== undefined && text !== null) {
+      if (tag === 'p') setText(e, text);
+      else e.textContent = text;
+    }
     if (cls) e.className = cls;
     parent.appendChild(e);
     return e;
   }
+  // ページにはじめからある文（中に別の要素がない段落だけ）も同じように区切る
+  (function () {
+    var ps = document.querySelectorAll('p');
+    for (var i = 0; i < ps.length; i++) {
+      if (ps[i].children.length === 0 && /[。、]/.test(ps[i].textContent)) setText(ps[i], ps[i].textContent);
+    }
+  })();
   function showOnly(id) {
     var ids = ['loading', 'message', 'form', 'receipt'];
     for (var i = 0; i < ids.length; i++) $(ids[i]).hidden = ids[i] !== id;
   }
   function showMessage(text, canRetry) {
-    $('message-text').textContent = text;
+    setText($('message-text'), text);
     $('retry').hidden = !canRetry;
     showOnly('message');
   }
@@ -211,7 +236,10 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
         }
       }
       add(box, 'p', '合計 ' + r.count + '冊　' + r.totalLabel, 'total');
-      add(box, 'p', 'お支払い：' + r.withdrawLabel + 'に、ご登録の口座から引き落としいたします。', 'pay');
+      var pay = add(box, 'p', null, 'pay');
+      add(pay, 'span', 'お支払い：' + r.withdrawLabel + 'に', 's');
+      add(pay, 'br');
+      add(pay, 'span', 'ご登録の口座から引き落としいたします。', 's');
     } else {
       add(box, 'p', '今回は、教材のお申し込みはありません。');
     }
@@ -274,7 +302,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
       $('total').textContent = yen(total);
     }
     function showError(msg) {
-      errorBox.textContent = msg;
+      setText(errorBox, msg);
       errorBox.hidden = false;
     }
     function ready() {
