@@ -27,6 +27,7 @@
   .group.req { color: #8c1d18; border-color: #c5221f; }
   .group.rec { color: #174ea6; border-color: #1a73e8; }
   .note { font-size: 16px; color: #3c4043; margin: 4px 0 0; }
+  .note span { display: inline-block; } /* 言葉の途中で折り返さない */
   input[type=checkbox], input[type=radio] { width: 24px; height: 24px; flex: none; margin: 0; }
   .total { font-size: 19px; text-align: right; margin: 12px 0; }
   .pay { background: #f0f6ff; border-radius: 8px; padding: 10px 12px; }
@@ -66,7 +67,7 @@
     </div>
     <div id="box-rec" hidden>
       <h2 class="group rec">教室からの追加のおすすめ</h2>
-      <p class="note">今後の学習で使う場面があるかもしれません。ご検討ください。</p>
+      <p class="note"><span>今後の学習で</span><span>使う場面が</span><span>あるかもしれません。</span><br><span>ご検討ください。</span></p>
       <ul class="items" id="items-rec"></ul>
     </div>
     <p class="total">合計 <strong id="count">0</strong>冊　<strong id="total">0円</strong></p>
