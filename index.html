@@ -30,6 +30,7 @@
   /* 1文目（21文字）がスマホの幅でも1行に入るよう、文字を幅に合わせて小さくする（最大16px） */
   .note { font-size: min(16px, calc((100vw - 70px) / 21)); }
   .note .one-line { white-space: nowrap; }
+  .note .chunk { display: inline-block; } /* 入りきらないときは「（講習時…）」の前で折り返す */
   input[type=checkbox], input[type=radio] { width: 24px; height: 24px; flex: none; margin: 0; }
   .total { font-size: 19px; text-align: right; margin: 12px 0; }
   .pay { background: #f0f6ff; border-radius: 8px; padding: 10px 12px; }
@@ -69,7 +70,7 @@
     </div>
     <div id="box-rec" hidden>
       <h2 class="group rec">教室からの追加のおすすめ</h2>
-      <p class="note"><span class="one-line">今後の学習で使う場面があるかもしれません。</span><br>ご検討ください。</p>
+      <p class="note"><span class="one-line">経験上、今後使う場面がありそうな教材です。</span><br><span class="chunk">この際、ご購入をお勧めします。</span><span class="chunk">（講習時・テスト前、自習時）</span></p>
       <ul class="items" id="items-rec"></ul>
     </div>
     <p class="total">合計 <strong id="count">0</strong>冊　<strong id="total">0円</strong></p>
