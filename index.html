@@ -23,6 +23,10 @@
   .items .name { flex: 1; }
   .items .price { white-space: nowrap; }
   .items.off { opacity: .45; }
+  .group { font-size: 18px; margin: 18px 0 2px; padding-left: 10px; border-left: 5px solid; }
+  .group.req { color: #8c1d18; border-color: #c5221f; }
+  .group.rec { color: #174ea6; border-color: #1a73e8; }
+  .note { font-size: 16px; color: #3c4043; margin: 4px 0 0; }
   input[type=checkbox], input[type=radio] { width: 24px; height: 24px; flex: none; margin: 0; }
   .total { font-size: 19px; text-align: right; margin: 12px 0; }
   .pay { background: #f0f6ff; border-radius: 8px; padding: 10px 12px; }
@@ -55,8 +59,16 @@
 <form id="form" novalidate hidden>
   <section class="card">
     <p class="student" id="student"></p>
-    <p>教室からおすすめする教材です。購入しない教材は、チェックを外してください。</p>
-    <ul class="items" id="items"></ul>
+    <p>内容をご確認のうえ、購入する教材にチェックを入れてください。</p>
+    <div id="box-req" hidden>
+      <h2 class="group req">ご本人と相談して決めた必須の教材</h2>
+      <ul class="items" id="items-req"></ul>
+    </div>
+    <div id="box-rec" hidden>
+      <h2 class="group rec">教室からの追加のおすすめ</h2>
+      <p class="note">今後の学習で使う場面があるかもしれません。ご検討ください。</p>
+      <ul class="items" id="items-rec"></ul>
+    </div>
     <p class="total">合計 <strong id="count">0</strong>冊　<strong id="total">0円</strong></p>
     <p class="pay">お支払い：<strong id="withdraw"></strong>に、ご登録の口座から引き落としいたします。</p>
     <p>ノートはご自身でご用意ください。</p>
@@ -99,6 +111,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
 (function () {
   var YES = '申し込む';
   var NO = '申し込まない';
+  var KIND_REC = 'おすすめ'; // ほか（必須・空）は必須として出す
   var MSG_BAD_LINK = 'このリンクは使えません。教室にお問い合わせください。';
   var MSG_UNAVAILABLE = 'ただいま表示できません。時間をおいて、もう一度お開きください。';
   var MSG_NETWORK = '通信できませんでした。電波のよいところで、もう一度「送信する」を押してください。';
@@ -178,11 +191,20 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
     add(box, 'p', r.student + ' 様', 'student');
     if (r.decision === YES) {
       add(box, 'p', 'お申し込みの教材');
-      var ul = add(box, 'ul', null, 'items');
-      for (var i = 0; i < r.items.length; i++) {
-        var lb = add(add(ul, 'li'), 'label');
-        add(lb, 'span', r.items[i].name, 'name');
-        add(lb, 'span', r.items[i].priceLabel, 'price');
+      var groups = [
+        { rec: false, title: '必須の教材', cls: 'group req' },
+        { rec: true, title: '追加のおすすめ', cls: 'group rec' }
+      ];
+      for (var g = 0; g < groups.length; g++) {
+        var its = r.items.filter(function (it) { return (it.kind === KIND_REC) === groups[g].rec; });
+        if (!its.length) continue;
+        add(box, 'p', groups[g].title, groups[g].cls);
+        var ul = add(box, 'ul', null, 'items');
+        for (var i = 0; i < its.length; i++) {
+          var lb = add(add(ul, 'li'), 'label');
+          add(lb, 'span', its[i].name, 'name');
+          add(lb, 'span', its[i].priceLabel, 'price');
+        }
       }
       add(box, 'p', '合計 ' + r.count + '冊　' + r.totalLabel, 'total');
       add(box, 'p', 'お支払い：' + r.withdrawLabel + 'に、ご登録の口座から引き落としいたします。', 'pay');
@@ -199,12 +221,14 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
   // 申込画面
   function renderForm(id, f) {
     var form = $('form');
-    var list = $('items');
+    var lists = [$('items-req'), $('items-rec')];
     $('student').textContent = f.student + ' 様' + (f.grade ? '（' + f.grade + '）' : '');
     $('withdraw').textContent = f.withdrawLabel;
     for (var i = 0; i < f.items.length; i++) {
       var it = f.items[i];
-      var lb = add(add(list, 'li'), 'label');
+      var rec = it.kind === KIND_REC;
+      $(rec ? 'box-rec' : 'box-req').hidden = false;
+      var lb = add(add(rec ? lists[1] : lists[0], 'li'), 'label');
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.className = 'item';
@@ -241,7 +265,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
           total += Number(boxes[i].getAttribute('data-price')) || 0;
         }
       }
-      list.className = no ? 'items off' : 'items';
+      for (var n = 0; n < lists.length; n++) lists[n].className = no ? 'items off' : 'items';
       $('count').textContent = String(count);
       $('total').textContent = yen(total);
     }
