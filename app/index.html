@@ -1,0 +1,2095 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<script>
+// ===== ここに貼る（本人） =====
+// API_URL：Apps Script の Webアプリの URL（「デプロイを管理」のウェブアプリの URL、…/exec）。保護者の画面 site/index.html の API_URL と同じもの
+// CLIENT_ID：Google Cloud で作った OAuth クライアント（ウェブ アプリケーション）の ID（…apps.googleusercontent.com）。Config.gs の GOOGLE_CLIENT_ID と同じもの
+// どちらかが空のうちは「設定がまだです」と出る。お試しは URL の後ろに ?mock=1 を付けて開く（架空のデータ・ログインなし）
+var API_URL = 'https://script.google.com/macros/s/AKfycbwm5BHF2vVwwJx2zshsAtagyDktfNFeX1gPjsEhGYI916EHDTNUkjaY4DZAl-KiJZut/exec';
+var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleusercontent.com';
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>教材申込（教室長）</title>
+<style>
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: #f4f5f7; color: #1f2328; font-size: 16px; line-height: 1.7;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  main { max-width: 1240px; margin: 0 auto; padding: 20px 24px 60px; }
+  h2 { font-size: 19px; margin: 0; }
+  h3 { font-size: 16px; margin: 0 0 8px; }
+  .card { background: #fff; border-radius: 10px; padding: 20px 24px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .muted { color: #5f6368; }
+  .small { font-size: 14px; }
+  .msg { margin: 10px 0 0; font-weight: bold; }
+  .msg.error { color: #b3261e; }
+  .msg.ok { color: #137333; }
+  .msg.info { color: #3c4043; font-weight: normal; }
+  .warn { color: #b3261e; font-weight: bold; margin: 8px 0 0; }
+
+  /* 上の帯 */
+  header { background: #fff; border-bottom: 1px solid #dadce0; position: sticky; top: 0; z-index: 10; }
+  .top-in { max-width: 1240px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brand { font-size: 18px; font-weight: bold; white-space: nowrap; }
+  .badge-mock { display: inline-block; margin-left: 8px; padding: 2px 10px; font-size: 13px; font-weight: bold;
+    color: #7a4b00; background: #fff2cc; border: 1px solid #f9ab00; border-radius: 999px; vertical-align: middle; }
+  .cls { display: flex; align-items: center; gap: 8px; font-weight: bold; }
+  .cls select { font-weight: bold; padding: 6px 8px; border: 1px solid #c9ced6; border-radius: 8px; background: #fff; }
+  nav.tabs { display: flex; gap: 6px; }
+  .tab { padding: 8px 18px; border: 1px solid #c9ced6; border-radius: 999px; background: #fff; cursor: pointer; font-weight: bold; }
+  .tab.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+  .spacer { flex: 1; }
+  .who { font-size: 13px; color: #5f6368; }
+
+  /* ボタン */
+  .btn { display: inline-block; padding: 10px 18px; border: 1px solid #c9ced6; border-radius: 8px; background: #fff;
+    cursor: pointer; font-weight: bold; }
+  .btn:hover:not(:disabled) { background: #f1f3f4; }
+  .btn:disabled { color: #9aa0a6; cursor: default; }
+  .btn-main { display: inline-block; padding: 14px 40px; font-size: 18px; font-weight: bold; color: #fff; background: #1a73e8;
+    border: 0; border-radius: 10px; cursor: pointer; min-width: 220px; }
+  .btn-main:hover:not(:disabled) { background: #1765cc; }
+  .btn-main:disabled { background: #9aa0a6; cursor: default; }
+  .btn-danger { color: #fff; background: #c5221f; border-color: #c5221f; }
+  .btn-danger:hover:not(:disabled) { background: #a50e0e; }
+  .btn-sm { padding: 4px 12px; font-size: 15px; }
+  .btn-link { border: 0; background: none; color: #1a73e8; cursor: pointer; padding: 0; font-weight: bold; text-decoration: underline; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, tr:focus-visible { outline: 3px solid #8ab4f8; outline-offset: 1px; }
+
+  /* 入力 */
+  input[type=text], input[type=search], select, textarea { padding: 10px 12px; border: 1px solid #c9ced6; border-radius: 8px; background: #fff; }
+  input[type=checkbox] { width: 20px; height: 20px; vertical-align: middle; margin: 0 4px 0 0; }
+  textarea { width: 100%; line-height: 1.6; resize: vertical; }
+  label.check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+
+  /* 作る：番号の段 */
+  .step { display: grid; grid-template-columns: 44px 1fr; gap: 0 14px; }
+  .num { width: 36px; height: 36px; border-radius: 50%; background: #1a73e8; color: #fff; font-weight: bold; font-size: 18px;
+    display: flex; align-items: center; justify-content: center; }
+  .step.off .num { background: #bdc1c6; }
+  .step-head { display: flex; align-items: center; gap: 12px; min-height: 36px; flex-wrap: wrap; }
+  .step-body { grid-column: 2; margin-top: 10px; }
+  .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #student { width: 320px; max-width: 100%; font-size: 17px; }
+  .grade { font-weight: bold; }
+  .history { margin: 10px 0 0; padding: 10px 14px; background: #f8f9fa; border-radius: 8px; list-style: none; }
+  .history li { padding: 2px 0; }
+  #month, #set { min-width: 220px; font-size: 17px; }
+  .withdraw { font-weight: bold; color: #174ea6; }
+
+  /* 選んだ教材 */
+  table { border-collapse: collapse; width: 100%; }
+  .chosen td, .chosen th { padding: 8px 8px; border-bottom: 1px solid #e3e5e8; text-align: left; vertical-align: middle; }
+  .chosen th { font-size: 14px; color: #5f6368; font-weight: normal; }
+  .chosen .no { width: 36px; color: #5f6368; }
+  .chosen .price { white-space: nowrap; text-align: right; width: 90px; }
+  .code { font-size: 13px; color: #5f6368; margin-left: 6px; white-space: nowrap; }
+  .bought { display: inline-block; font-size: 13px; color: #7a4b00; background: #fff2cc; border-radius: 6px; padding: 0 8px; margin-left: 6px; }
+  .seg { display: inline-flex; border: 1px solid #c9ced6; border-radius: 8px; overflow: hidden; white-space: nowrap; }
+  .seg button { border: 0; background: #fff; padding: 4px 12px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid #c9ced6; }
+  .seg button.on.req { background: #c5221f; color: #fff; font-weight: bold; }
+  .seg button.on.rec { background: #1a73e8; color: #fff; font-weight: bold; }
+  .x { border: 0; background: none; font-size: 20px; line-height: 1; color: #5f6368; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+  .x:hover { background: #f1f3f4; color: #b3261e; }
+  .sum { margin: 10px 0 0; font-size: 17px; }
+  .empty { padding: 14px; background: #f8f9fa; border-radius: 8px; color: #5f6368; margin: 0; }
+  .pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; }
+  .picker { border: 1px solid #e3e5e8; border-radius: 10px; padding: 14px 16px; }
+  .picker-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .picker-head h3 { margin: 0; }
+  .picks { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
+  .picks li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f1f3f4; }
+  .picks .p-name { flex: 1; min-width: 0; }
+  .picks .p-price { white-space: nowrap; color: #3c4043; }
+  #search { width: 100%; }
+  .seg-filter button.on { background: #e8f0fe; color: #174ea6; font-weight: bold; }
+
+  /* 送る文 */
+  .result-sum { margin: 0 0 10px; font-size: 17px; }
+  #send-text { font-size: 15px; background: #f8f9fa; }
+  .confirm { margin-top: 12px; padding: 14px 16px; border: 2px solid #f9ab00; background: #fffbea; border-radius: 10px; }
+  .confirm p { margin: 0 0 10px; font-weight: bold; }
+  .confirm .row { gap: 10px; }
+
+  /* 一覧 */
+  .filters { display: flex; gap: 14px 20px; flex-wrap: wrap; align-items: center; }
+  .filters label { display: inline-flex; align-items: center; gap: 6px; }
+  #f-name { width: 180px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0 0; font-size: 14px; color: #3c4043; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { display: inline-block; width: 18px; height: 14px; border-radius: 3px; border-left: 4px solid; }
+  .sw.red { background: #f4cccc; border-color: #d93025; }
+  .sw.orange { background: #fce5cd; border-color: #e8710a; }
+  .sw.yellow { background: #fff2cc; border-color: #f9ab00; }
+  .sw.gray { background: #e8eaed; border-color: #9aa0a6; }
+  .table-wrap { overflow-x: auto; margin-top: 12px; }
+  .list th, .list td { padding: 10px 10px; text-align: left; border-bottom: 1px solid #e3e5e8; vertical-align: middle; }
+  .list th { font-size: 14px; color: #5f6368; font-weight: normal; white-space: nowrap; }
+  .list tbody tr.r { cursor: pointer; border-left: 5px solid transparent; }
+  .list tbody tr.r:hover td { filter: brightness(.97); }
+  .list tr.c-red td { background: #f4cccc; } .list tr.c-red { border-left-color: #d93025; }
+  .list tr.c-orange td { background: #fce5cd; } .list tr.c-orange { border-left-color: #e8710a; }
+  .list tr.c-yellow td { background: #fff2cc; } .list tr.c-yellow { border-left-color: #f9ab00; }
+  .list tr.c-gray td { background: #e8eaed; color: #5f6368; } .list tr.c-gray { border-left-color: #9aa0a6; }
+  .list tr.open td { font-weight: bold; }
+  .list td.memo { min-width: 120px; color: #3c4043; font-size: 15px; }
+  .list td.nw { white-space: nowrap; }
+  .new { display: inline-block; margin-left: 6px; padding: 0 8px; font-size: 13px; font-weight: bold; color: #fff; background: #1a73e8; border-radius: 999px; }
+  tr.detail > td { background: #fff; padding: 0; border-bottom: 2px solid #1a73e8; }
+  .d-box { padding: 16px 18px 20px; border-left: 5px solid #1a73e8; }
+  .d-info { display: flex; flex-wrap: wrap; gap: 4px 22px; margin-bottom: 12px; }
+  .d-items td, .d-items th { padding: 8px; border-bottom: 1px solid #e3e5e8; text-align: left; vertical-align: middle; }
+  .d-items th { font-size: 14px; color: #5f6368; font-weight: normal; white-space: nowrap; }
+  .d-items .stopped td { color: #80868b; }
+  .d-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; }
+  .d-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+  .counter { font-size: 13px; color: #5f6368; }
+
+  @media (max-width: 900px) {
+    main { padding: 16px; }
+    .top-in { padding: 10px 16px; }
+    .pickers, .d-grid { grid-template-columns: 1fr; }
+    .card { padding: 16px; }
+    .list th, .list td { padding: 8px 6px; }
+    .list td.nw, .d-items .nw { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="top-in">
+    <div class="brand">教材申込<span id="mock-badge" class="badge-mock" hidden>お試し表示（架空のデータ）</span></div>
+    <div id="cls-box" class="cls" hidden>
+      <span id="cls-name"></span>
+      <select id="cls-switch" aria-label="教室を切り替える" hidden></select>
+    </div>
+    <nav id="tabs" class="tabs" hidden>
+      <button type="button" id="tab-make" class="tab on">作る</button>
+      <button type="button" id="tab-list" class="tab">一覧（新しい <span id="new-count">0</span>）</button>
+    </nav>
+    <button type="button" id="refresh" class="btn btn-sm" hidden>更新</button>
+    <span class="spacer"></span>
+    <span id="who" class="who"></span>
+  </div>
+</header>
+
+<main>
+  <!-- ログインの期限切れ：入力は残したまま、ここで入り直す -->
+  <section id="banner" class="card confirm" hidden>
+    <p>ログインの期限が切れました。もう一度ログインしてください（入力したものは消えていません）。</p>
+    <div id="relogin-btn"></div>
+  </section>
+
+  <section id="pane-loading" class="card"><p>読み込んでいます…</p></section>
+
+  <section id="pane-setup" class="card" hidden>
+    <h2>設定がまだです（API_URL・CLIENT_ID）</h2>
+    <p class="muted">このファイル（site/app/index.html）の先頭の API_URL と CLIENT_ID に貼ってください。お試しは URL の後ろに ?mock=1 を付けて開きます。</p>
+  </section>
+
+  <section id="pane-login" class="card" hidden>
+    <h2>ログイン</h2>
+    <p id="login-text">教室のGmailでログインしてください。</p>
+    <div id="login-btn"></div>
+    <p><button type="button" id="login-again" class="btn" hidden>選び直す</button></p>
+  </section>
+
+  <section id="pane-error" class="card" hidden>
+    <p id="error-text" class="msg error"></p>
+    <p><button type="button" class="btn" onclick="location.reload()">もう一度読み込む</button></p>
+  </section>
+
+  <!-- ===== 作る ===== -->
+  <div id="view-make" hidden>
+    <section class="card">
+      <div class="step" id="step1">
+        <span class="num">1</span>
+        <div class="step-head"><h2>生徒</h2></div>
+        <div class="step-body">
+          <div class="row">
+            <input type="text" id="student" list="student-list" placeholder="名前を打つと候補が出ます" autocomplete="off">
+            <datalist id="student-list"></datalist>
+            <span id="student-grade" class="grade"></span>
+            <button type="button" id="history-toggle" class="btn-link" hidden></button>
+          </div>
+          <p id="student-msg" class="warn" hidden></p>
+          <ul id="history-box" class="history" hidden></ul>
+          <p id="dup-note" class="small muted" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step" id="step2">
+        <span class="num">2</span>
+        <div class="step-head"><h2>引き落とし</h2></div>
+        <div class="step-body">
+          <div class="row">
+            <select id="month" aria-label="引き落とし月"></select>
+            <span id="withdraw-label" class="withdraw"></span>
+          </div>
+          <p class="small muted" style="margin:6px 0 0">引き落としは27日です（土日・祝日なら次の平日）。今月は27日の当日から選べません。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step" id="step3">
+        <span class="num">3</span>
+        <div class="step-head"><h2>セット</h2></div>
+        <div class="step-body">
+          <div class="row">
+            <select id="set" aria-label="セット"></select>
+            <span id="set-msg" class="small muted"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step" id="step4">
+        <span class="num">4</span>
+        <div class="step-head"><h2>教材</h2><span class="small muted">1冊ずつ「必須」「おすすめ」を選べます。18冊まで。</span></div>
+        <div class="step-body">
+          <div id="chosen-box"></div>
+          <p id="chosen-sum" class="sum"></p>
+          <div class="pickers">
+            <div class="picker">
+              <div class="picker-head"><h3>よく使う教材</h3><span id="fav-note" class="small muted"></span></div>
+              <ul id="fav-list" class="picks"></ul>
+            </div>
+            <div class="picker">
+              <div class="picker-head">
+                <h3>探す</h3>
+                <div class="seg seg-filter" role="group" aria-label="しぼり方">
+                  <button type="button" id="filter-grade" class="on">学年でしぼる</button>
+                  <button type="button" id="filter-all">全部</button>
+                  <button type="button" id="filter-set">セットから</button>
+                </div>
+              </div>
+              <input type="search" id="search" placeholder="教材名・コードの一部" autocomplete="off">
+              <select id="search-set" aria-label="中身を見るセット" hidden></select>
+              <ul id="search-list" class="picks"></ul>
+              <p id="search-note" class="small muted" style="margin:6px 0 0"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step" id="step5">
+        <span class="num">5</span>
+        <div class="step-head"><h2>作る</h2></div>
+        <div class="step-body">
+          <div class="row">
+            <button type="button" id="create" class="btn-main">作る</button>
+            <span id="create-hint" class="muted"></span>
+          </div>
+          <div id="confirm" class="confirm" hidden>
+            <p id="confirm-text"></p>
+            <div class="row">
+              <button type="button" id="confirm-yes" class="btn btn-danger">取り消して作る</button>
+              <button type="button" id="confirm-no" class="btn">やめる</button>
+            </div>
+          </div>
+          <p id="create-msg" class="msg" hidden></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="step off" id="step6">
+        <span class="num">6</span>
+        <div class="step-head"><h2>送る文をコピー</h2></div>
+        <div class="step-body">
+          <p id="result-empty" class="empty">「作る」を押すと、ここに保護者へ送る文が出ます。</p>
+          <div id="result" hidden>
+            <p id="result-sum" class="result-sum"></p>
+            <textarea id="send-text" rows="12" readonly></textarea>
+            <div class="row" style="margin-top:12px">
+              <button type="button" id="copy" class="btn-main">送る文をコピー</button>
+              <span id="copy-msg" class="msg ok" hidden></span>
+            </div>
+            <p class="small muted">コピーした文を塾生アプリに貼って送ります。</p>
+            <p><button type="button" id="next" class="btn">次の生徒を作る</button></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== 一覧 ===== -->
+  <div id="view-list" hidden>
+    <section class="card">
+      <div class="filters">
+        <label>状態
+          <select id="f-status">
+            <option value="">すべて</option>
+            <option value="none">未回答</option>
+            <option value="new">新しい</option>
+            <option value="unhanded">未渡しあり</option>
+            <option value="metis">METIS未入力あり</option>
+          </select>
+        </label>
+        <label>引き落とし <select id="f-month"><option value="">すべて</option></select></label>
+        <label>生徒 <input type="search" id="f-name" placeholder="名前で探す" autocomplete="off"></label>
+        <label class="check"><input type="checkbox" id="f-cancel">取り消しも出す</label>
+        <span class="spacer"></span>
+        <span id="list-time" class="small muted"></span>
+      </div>
+      <p class="legend">
+        <span><i class="sw red"></i>METIS未入力</span>
+        <span><i class="sw orange"></i>未渡し</span>
+        <span><i class="sw yellow"></i>未回答（送って3日）</span>
+        <span><i class="sw gray"></i>申し込まない・取り消し</span>
+        <span><b class="new" style="margin:0">新しい</b>保護者が答えて、まだ開いていない</span>
+      </p>
+      <p id="list-msg" class="msg" hidden></p>
+      <div class="table-wrap">
+        <table class="list">
+          <thead><tr><th>送った日</th><th>生徒</th><th>学年</th><th>引き落とし</th><th>状態</th><th>未渡し</th><th>METIS未</th><th>メモ</th></tr></thead>
+          <tbody id="list-body"></tbody>
+        </table>
+      </div>
+      <p id="list-empty" class="empty" hidden></p>
+    </section>
+  </div>
+</main>
+
+<script id="logic">
+// 画面の計算（DOM を使わない）。Logic.gs の祝日・引き落とし日の計算をそのまま写したものと、お試し（?mock=1）の偽の API
+var AppLogic = (function () {
+  'use strict';
+  var MAX_ITEMS = 18;
+  var CLASS_CODES = ['A', 'B', 'C', 'D', 'T'];
+  var REQUEST_ID_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+  // ---- ここから Logic.gs と同じ（引き落とし日。27日。土日・祝日なら次の平日）----
+
+  function withdrawDate(month, today) {
+    var year = today.getFullYear();
+    if (month < today.getMonth() + 1) year += 1;
+    return new Date(year, month - 1, 27);
+  }
+
+  // 日本の祝日か（2026年以降の決まり。春分・秋分は計算式で、2099年まで）
+  function isJapaneseHoliday(d) {
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    if (isBaseHoliday_(y, m, day)) return true;
+    // 振替休日：日曜の祝日のあと、祝日でない最初の日
+    var prev = new Date(y, m - 1, day - 1);
+    while (isBaseHoliday_(prev.getFullYear(), prev.getMonth() + 1, prev.getDate())) {
+      if (prev.getDay() === 0) return true;
+      prev = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 1);
+    }
+    // 国民の休日：前の日と次の日が祝日にはさまれた平日
+    var b = new Date(y, m - 1, day - 1);
+    var a = new Date(y, m - 1, day + 1);
+    return d.getDay() !== 0 &&
+      isBaseHoliday_(b.getFullYear(), b.getMonth() + 1, b.getDate()) &&
+      isBaseHoliday_(a.getFullYear(), a.getMonth() + 1, a.getDate());
+  }
+
+  // 振替・国民の休日をのぞいた祝日
+  function isBaseHoliday_(y, m, day) {
+    var fixed = ['1/1', '2/11', '2/23', '4/29', '5/3', '5/4', '5/5', '8/11', '11/3', '11/23'];
+    if (fixed.indexOf(m + '/' + day) >= 0) return true;
+    var nthMonday = function (n) { // その月の第n月曜の日
+      var first = new Date(y, m - 1, 1).getDay();
+      return 1 + ((8 - first) % 7) + (n - 1) * 7;
+    };
+    if (m === 1 && day === nthMonday(2)) return true;  // 成人の日
+    if (m === 7 && day === nthMonday(3)) return true;  // 海の日
+    if (m === 9 && day === nthMonday(3)) return true;  // 敬老の日
+    if (m === 10 && day === nthMonday(2)) return true; // スポーツの日
+    var k = y - 1980;
+    if (m === 3 && day === Math.floor(20.8431 + 0.242194 * k - Math.floor(k / 4))) return true; // 春分の日
+    if (m === 9 && day === Math.floor(23.2488 + 0.242194 * k - Math.floor(k / 4))) return true; // 秋分の日
+    return false;
+  }
+
+  // 土日・祝日なら次の平日にずらした日（時刻は0時）
+  function nextBankDay(date) {
+    var d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    while (d.getDay() === 0 || d.getDay() === 6 || isJapaneseHoliday(d)) {
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    }
+    return d;
+  }
+
+  // 2026-11-27 → "2026年11月27日（金）"
+  function dateLabelJa(d) {
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' +
+      '日月火水木金土'.charAt(d.getDay()) + '）';
+  }
+
+  // ---- ここまで Logic.gs と同じ ----
+
+  // 引き落とし月の選びかた：今月から12か月。今日が27日以降なら今月は出さない（表と同じ）
+  function monthChoices(today) {
+    var t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var out = [];
+    for (var i = 0; i < 12; i++) {
+      if (i === 0 && t.getDate() >= 27) continue;
+      var first = new Date(t.getFullYear(), t.getMonth() + i, 1);
+      var m = first.getMonth() + 1;
+      out.push({
+        month: m, year: first.getFullYear(), label: first.getFullYear() + '年' + m + '月',
+        withdrawLabel: dateLabelJa(nextBankDay(withdrawDate(m, t)))
+      });
+    }
+    return out;
+  }
+
+  // 学年の文字から、学年でしぼる正規表現を選ぶ（Settings.gs の pickPatternFor_ と同じ）
+  function pickPatternFor(grade, pattern) {
+    var g = String(grade === null || grade === undefined ? '' : grade);
+    if (g.indexOf('小学') >= 0) return pattern.sho;
+    if (g.indexOf('中学') >= 0) return pattern.chu;
+    if (g.indexOf('高校') >= 0) return pattern.kou;
+    return pattern.all;
+  }
+  // 対象学年が正規表現に合うか（空は「その他」扱い。表と同じ）
+  function targetMatches(target, pattern) {
+    var t = String(target === null || target === undefined ? '' : target).trim() || 'その他';
+    try {
+      return new RegExp(pattern).test(t);
+    } catch (e) {
+      return true;
+    }
+  }
+  // 探す文字をそろえる（全角英数字→半角、小文字）
+  function normalizeQuery(s) {
+    return String(s === null || s === undefined ? '' : s)
+      .replace(/[！-～]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); })
+      .replace(/　/g, ' ').trim().toLowerCase();
+  }
+  // 押すごとの印（clientKey）。同じ印の2回目は、サーバーが前の結果を返す
+  function newClientKey() {
+    var c = typeof crypto !== 'undefined' ? crypto : null;
+    if (c && typeof c.randomUUID === 'function') {
+      try { return c.randomUUID(); } catch (e) { /* 下で作る */ }
+    }
+    var hex = '';
+    for (var i = 0; i < 16; i++) {
+      var b = 0;
+      if (c && typeof c.getRandomValues === 'function') b = c.getRandomValues(new Uint8Array(1))[0];
+      else b = Math.floor(Math.random() * 256);
+      hex += (b < 16 ? '0' : '') + b.toString(16);
+    }
+    return hex;
+  }
+  // 教材を1冊足した新しい並び（m は教材マスタの1冊）。足せないとき（マスタにない・もう入っている・18冊）は items をそのまま返す
+  function addOne(items, m) {
+    if (!m || items.length >= MAX_ITEMS || items.some(function (it) { return it.code === m.code; })) return items;
+    return items.concat([{ code: m.code, name: m.name, price: m.price, kind: '必須' }]);
+  }
+  // 「セットから」の並び：[{code, missing（マスタにない）, inList（もう入っている）}]
+  function setPicks(set, masterMap, items) {
+    return (set && set.codes ? set.codes : []).map(function (code) {
+      return {
+        code: code, missing: !Object.prototype.hasOwnProperty.call(masterMap, code),
+        inList: items.some(function (it) { return it.code === code; })
+      };
+    });
+  }
+  // 2200 → "2,200円"
+  function yen(n) {
+    return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '円';
+  }
+  // 'yyyy年M月d日 H:mm' などの形にする（Utilities.formatDate の代わり。お試し用）
+  function formatDate(d, pattern) {
+    if (Object.prototype.toString.call(d) !== '[object Date]' || isNaN(d.getTime())) return '';
+    return pattern.replace(/yyyy|mm|M|d|H/g, function (t) {
+      if (t === 'yyyy') return String(d.getFullYear());
+      if (t === 'mm') return (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+      if (t === 'M') return String(d.getMonth() + 1);
+      if (t === 'd') return String(d.getDate());
+      return String(d.getHours());
+    });
+  }
+
+  // ================= お試し（?mock=1）：偽の API。返す形は Staff.gs と同じ =================
+  function createMockApi(now) {
+    var base = now ? new Date(now.getTime()) : new Date();
+    var T = new Date(base.getFullYear(), base.getMonth(), base.getDate()); // 今日（0時）
+    var seed = 20261019;
+    var rand = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    var ago = function (n, hh, mm) {
+      return new Date(T.getFullYear(), T.getMonth(), T.getDate() - n, hh === undefined ? 10 : hh, mm || 0);
+    };
+    var wdOf = function (offset) { return nextBankDay(new Date(T.getFullYear(), T.getMonth() + offset, 27)); };
+
+    var MSG_NO_CLASS = 'この教室は開けません';
+    var MSG_NOT_FOUND = 'この申込は見つかりません';
+    var WRITE_OPS = ['create', 'updateItem', 'memo', 'cancel'];
+    var MASTER = [
+      { code: 'M001', name: '中1 数学 基礎ワーク', price: 1650, target: '中学生' },
+      { code: 'M002', name: '中1 英語 基礎ワーク', price: 1650, target: '中学生' },
+      { code: 'M003', name: '中2 数学 標準問題集', price: 1760, target: '中学生' },
+      { code: 'M004', name: '中2 英語 標準問題集', price: 1760, target: '中学生' },
+      { code: 'M005', name: '中3 高校入試対策 5教科', price: 2420, target: '中学生' },
+      { code: 'M006', name: '中学 理科 まとめノート', price: 1320, target: '中学生' },
+      { code: 'M007', name: '高校 数学I・A 基礎ドリル', price: 1870, target: '高校生' },
+      { code: 'M008', name: '高校 英文法 トレーニング', price: 1540, target: '高校生' },
+      { code: 'M009', name: '高校 古文単語 300', price: 1100, target: '高校生' },
+      { code: 'M010', name: '小6 算数 総まとめ', price: 1210, target: '小学生' },
+      { code: 'M011', name: '小6 国語 読解ドリル', price: 1210, target: '小学生' },
+      { code: 'M012', name: '漢字検定 3級 問題集', price: 1430, target: '検定' },
+      { code: 'M013', name: '英語検定 3級 過去問', price: 1650, target: '検定' }
+    ];
+    var masterMap = Object.create(null);
+    MASTER.forEach(function (m) { masterMap[m.code] = { name: m.name, price: m.price }; });
+    var SETS = [
+      { name: '中1 基本セット', codes: ['M001', 'M002', 'M006'] },
+      { name: '中3 受験セット', codes: ['M005', 'M006', 'M012'] },
+      { name: '高校 英語・古文セット', codes: ['M008', 'M009', 'M099'] } // M099 は教材マスタにない（「マスタにない教材」の見え方用）
+    ];
+    var FAVS = ['M006', 'M012', 'M008'];
+    var PICK = {
+      sho: '^(小学生.*|検定|その他)$',
+      chu: '^(中学生.*|高校入試問題集|中・高過去問|小学生・中学生|検定|その他)$',
+      kou: '^(高校生|赤本|中・高過去問|中学生・高校生|検定|その他)$',
+      all: '.*'
+    };
+    // Config.gs の SEND_MESSAGE_LINES・Settings.gs の REMIND_MESSAGE_LINES と同じ
+    var SEND_LINES = [
+      'お世話になっております。', '',
+      '先日、ご本人と今後の学習について相談いたしました。',
+      'そのうえで必要と考えている教材と、教室長がおすすめする教材を、{生徒}さんの申込書にまとめました。', '',
+      '下のリンクから内容をご確認いただき、お申し込みをお願いいたします。', '',
+      '▼お申し込みはこちら', '{リンク}', '',
+      'ご不明な点は、このメッセージでお気軽にお問い合わせください。'
+    ];
+    var REMIND_LINES = [
+      'お世話になっております。', '',
+      '先日お送りした{生徒}さんの教材の申込書は、ご覧いただけましたでしょうか。',
+      'お手数ですが、下のリンクからご確認をお願いいたします。', '',
+      '▼お申し込みはこちら', '{リンク}', '',
+      'ご不明な点は、このメッセージでお気軽にお問い合わせください。'
+    ];
+    var me = { home: 'A', classes: ['A', 'B'] };
+    var classes = {
+      A: { code: 'A', name: '架空教室', reqs: [], items: [], nextReq: 2, nextItem: 2, students: [
+        { name: '生徒A', grade: '中学1年' }, { name: '生徒B', grade: '中学2年' }, { name: '生徒C', grade: '中学3年' },
+        { name: '生徒D', grade: '高校1年' }, { name: '生徒E', grade: '小学6年' }, { name: '生徒F', grade: '中学2年' },
+        { name: '生徒G', grade: '中学1年' }, { name: '生徒G', grade: '中学1年' }
+      ] },
+      B: { code: 'B', name: '架空教室B', reqs: [], items: [], nextReq: 2, nextItem: 2, students: [
+        { name: '生徒H', grade: '中学1年' }, { name: '生徒I', grade: '高校2年' }
+      ] }
+    };
+    var cache = Object.create(null);
+
+    function findReq(c, id) {
+      for (var i = 0; i < c.reqs.length; i++) if (c.reqs[i].id === id) return c.reqs[i];
+      return null;
+    }
+    function itemsOf(c, id) { return c.items.filter(function (it) { return it.id === id; }); }
+    function gradeOf(c, name) {
+      for (var i = 0; i < c.students.length; i++) if (c.students[i].name === name) return c.students[i].grade;
+      return '';
+    }
+    // item：[コード, 区分, 状態, 渡した日（何日前）, METIS]
+    function addReq(c, r) {
+      var id;
+      do { id = makeRequestId(c.code, rand); } while (findReq(c, id));
+      var req = {
+        row: c.nextReq++, id: id, student: r.student, grade: gradeOf(c, r.student), withdraw: r.withdraw, sent: r.sent,
+        status: r.status || '未回答', appliedAt: r.appliedAt || '', parentName: r.parentName || '', memo: r.memo || '',
+        seenAt: r.seenAt || ''
+      };
+      c.reqs.push(req);
+      (r.items || []).forEach(function (x) {
+        var m = masterMap[x[0]];
+        c.items.push({
+          row: c.nextItem++, id: id, student: r.student, code: x[0], name: m.name, price: m.price,
+          status: x[2] || '未回答', handed: (x[3] === undefined || x[3] === null) ? '' : ago(x[3]),
+          metis: x[4] === true, kind: x[1] === 'おすすめ' ? 'おすすめ' : '必須'
+        });
+      });
+      return req;
+    }
+
+    // ---- 架空の申込（行の色・状態がひととおり出るように）----
+    var A = classes.A;
+    addReq(A, { student: '生徒A', sent: ago(40), withdraw: wdOf(0), status: '申し込む', appliedAt: ago(39, 20, 15),
+      parentName: '生徒Aの保護者', seenAt: ago(38),
+      items: [['M001', '必須', '買う', 30, true], ['M002', '必須', '買う', 30, true]] });
+    addReq(A, { student: '生徒D', sent: ago(20), withdraw: wdOf(0), status: '申し込む', appliedAt: ago(19, 21, 5),
+      parentName: '生徒Dの保護者', seenAt: ago(18),
+      items: [['M007', '必須', '買う', 6, false], ['M008', '必須', '買う', 6, true], ['M009', 'おすすめ', '買わない']] });
+    addReq(A, { student: '生徒E', sent: ago(9), withdraw: wdOf(1), status: '申し込まない', appliedAt: ago(8, 19, 30),
+      parentName: '生徒Eの保護者', seenAt: ago(7),
+      items: [['M010', '必須', '買わない'], ['M011', 'おすすめ', '買わない']] });
+    addReq(A, { student: '生徒F', sent: ago(8), withdraw: wdOf(1), status: '取り消し',
+      items: [['M003', '必須'], ['M004', '必須']] });
+    addReq(A, { student: '生徒B', sent: ago(5), withdraw: wdOf(1),
+      items: [['M003', '必須'], ['M004', '必須'], ['M006', 'おすすめ']] });
+    addReq(A, { student: '生徒C', sent: ago(4), withdraw: wdOf(1), status: '申し込む', appliedAt: ago(1, 19, 42),
+      parentName: '生徒Cの保護者', memo: '英検の問題集は来月また相談',
+      items: [['M005', '必須', '買う'], ['M006', 'おすすめ', '買う'], ['M013', 'おすすめ', '買わない']] });
+    addReq(A, { student: '生徒A', sent: ago(1), withdraw: wdOf(1),
+      items: [['M006', '必須'], ['M012', 'おすすめ']] });
+    addReq(classes.B, { student: '生徒H', sent: ago(2), withdraw: wdOf(1), items: [['M001', '必須'], ['M002', '必須']] });
+
+    function url(id) { return 'https://example.com/otameshi/?id=' + encodeURIComponent(id); }
+    // 送る文のリンク：お試しなので、開けないことを同じ行に書く
+    function linkText(id) { return url(id) + '（お試しのため開けません）'; }
+    function findForCls(x, rawId) {
+      var id = typeof rawId === 'string' ? rawId.trim() : '';
+      var p = parseRequestId(id);
+      if (!p || p.classCode !== x.cls) return null;
+      return findReq(x.c, id);
+    }
+    function viewOf(x, req) {
+      return requestView({ status: req.status, sent: req.sent, appliedAt: req.appliedAt, seenAt: req.seenAt,
+        items: itemsOf(x.c, req.id) }, T);
+    }
+    function openView(x, req) {
+      return {
+        id: req.id, student: req.student, grade: req.grade, status: req.status,
+        withdrawLabel: dateLabelJa(nextBankDay(req.withdraw)), sentLabel: formatDate(req.sent, 'M月d日'),
+        appliedAtLabel: formatDate(req.appliedAt, 'yyyy年M月d日 H:mm'), parentName: req.parentName,
+        view: viewOf(x, req),
+        items: itemsOf(x.c, req.id).map(function (it) {
+          return { row: it.row, code: it.code, name: it.name, priceLabel: yen(it.price), kind: it.kind, status: it.status,
+            handed: formatDate(it.handed, 'M月d日'), metis: it.metis };
+        }),
+        memo: req.memo
+      };
+    }
+    function cancelReq(x, req) {
+      if (req.status === '未回答') { req.status = '取り消し'; return { ok: true }; }
+      if (req.status === '申し込む') {
+        itemsOf(x.c, req.id).forEach(function (it) { if (it.status === '買う') it.status = 'やめた'; });
+        return { ok: true };
+      }
+      return { error: 'この申込は取り消せません' };
+    }
+
+    var OPS = {
+      init: function (x) {
+        return { ok: true, data: {
+          me: { home: me.home, classes: me.classes.slice() },
+          cls: { code: x.cls, name: x.c.name },
+          students: x.c.students,
+          duplicates: findDuplicateNames(x.c.students.map(function (s) { return s.name; })),
+          sets: SETS, favorites: FAVS, master: MASTER, pickPattern: PICK
+        } };
+      },
+      history: function (x) {
+        var student = typeof x.args.student === 'string' ? x.args.student.trim() : '';
+        if (student === '') return { ok: true, data: [] };
+        var out = [];
+        for (var i = x.c.items.length - 1; i >= 0; i--) {
+          var it = x.c.items[i];
+          if (it.status !== '買う' && it.status !== 'やめた') continue;
+          if (String(it.student).trim() !== student) continue;
+          var req = findReq(x.c, it.id);
+          out.push({ code: it.code, name: it.name, dateLabel: formatDate(req && req.appliedAt, 'yyyy年M月d日') });
+        }
+        return { ok: true, data: out };
+      },
+      create: function (x) {
+        var a = x.args;
+        var student = String(typeof a.student === 'string' ? a.student : '').trim();
+        var month = Number(a.month);
+        if (!student || !(month >= 1 && month <= 12 && Math.floor(month) === month)) {
+          return { ok: false, error: '生徒と引き落とし月を選んでください' };
+        }
+        var wd = withdrawDate(month, T);
+        if (wd.getTime() <= T.getTime()) return { ok: false, error: '引き落とし月を選び直してください（今月の27日を過ぎています）' };
+        var found = null;
+        for (var i = 0; i < x.c.students.length; i++) if (x.c.students[i].name === student) { found = x.c.students[i]; break; }
+        if (!found) return { ok: false, error: '生徒一覧にいない生徒です' };
+        if (findDuplicateNames(x.c.students.map(function (s) { return s.name; })).indexOf(student) >= 0) {
+          return { ok: false, error: '同じ名前が2人います：' + student + '。片方の名前に印を付けて貼り直してください' };
+        }
+        var pending = x.c.reqs.filter(function (r) { return String(r.student).trim() === student && r.status === '未回答'; });
+        if (pending.length && a.cancelPrevious !== true) {
+          var last = pending[pending.length - 1];
+          return { ok: true, data: { needConfirm: { id: last.id, sentLabel: formatDate(last.sent, 'M月d日') } } };
+        }
+        var items = Array.isArray(a.items) ? a.items.slice(0, 50) : [];
+        var codes = [];
+        var kindOf = Object.create(null);
+        items.forEach(function (it) {
+          it = it && typeof it === 'object' ? it : {};
+          var code = typeof it.code === 'string' || typeof it.code === 'number' ? String(it.code) : '';
+          codes.push(code);
+          var ck = code.trim();
+          if (ck !== '' && !(ck in kindOf)) kindOf[ck] = it.kind === 'おすすめ' ? 'おすすめ' : '必須';
+        });
+        var built = buildItems(codes, masterMap);
+        if (built.error) return { ok: false, error: built.error };
+        if (built.unknown.length) return { ok: false, error: '見つからないコード：' + built.unknown.join('、') };
+        if (built.items.length === 0) return { ok: false, error: '教材コードを1つ以上入れてください' };
+        var withdraw = nextBankDay(wd);
+        var req = addReq(x.c, { student: student, sent: new Date(), withdraw: withdraw,
+          items: built.items.map(function (it) { return [it.code, kindOf[it.code] || '必須']; }) });
+        pending.forEach(function (p) { cancelReq(x, p); });
+        var total = 0;
+        var reqCount = 0;
+        built.items.forEach(function (it) { total += it.price; if ((kindOf[it.code] || '必須') === '必須') reqCount += 1; });
+        return { ok: true, data: {
+          id: req.id, url: url(req.id), student: student,
+          sendText: buildMessage(SEND_LINES, messageVals_(x.c.name, student, linkText(req.id), withdraw, T)),
+          count: built.items.length, reqCount: reqCount, recCount: built.items.length - reqCount,
+          total: total, totalLabel: yen(total), withdrawLabel: dateLabelJa(nextBankDay(withdraw))
+        } };
+      },
+      list: function (x) {
+        var rows = [];
+        x.c.reqs.forEach(function (req) {
+          if (!parseRequestId(req.id)) return;
+          rows.push({ row: req.row, sent: req.sent, out: {
+            id: req.id, student: req.student, grade: req.grade, withdrawLabel: dateLabelJa(nextBankDay(req.withdraw)),
+            sentLabel: formatDate(req.sent, 'M月d日'), status: req.status, view: viewOf(x, req), memo: req.memo
+          } });
+        });
+        rows.sort(newestFirst_);
+        return { ok: true, data: rows.map(function (r) { return r.out; }) };
+      },
+      open: function (x) {
+        var req = findForCls(x, x.args.id);
+        if (!req) return { ok: false, error: MSG_NOT_FOUND };
+        if (me.home === x.cls && isFilled_(req.appliedAt) && !isFilled_(req.seenAt)) req.seenAt = new Date();
+        return { ok: true, data: openView(x, req) };
+      },
+      updateItem: function (x) {
+        var a = x.args;
+        var req = findForCls(x, a.id);
+        if (!req) return { ok: false, error: MSG_NOT_FOUND };
+        var row = Number(a.row);
+        var item = null;
+        itemsOf(x.c, req.id).forEach(function (it) { if (it.row === row) item = it; });
+        if (!item) return { ok: false, error: 'この教材は見つかりません' };
+        if (a.handed !== undefined && a.handed !== 'today' && a.handed !== '') return { ok: false, error: 'badrequest' };
+        if (a.metis !== undefined && typeof a.metis !== 'boolean') return { ok: false, error: 'badrequest' };
+        if (a.stop === true && item.status !== '買う') return { ok: false, error: 'この教材はやめられません' };
+        if (a.handed === 'today') item.handed = new Date(T.getTime());
+        else if (a.handed === '') item.handed = '';
+        if (typeof a.metis === 'boolean') item.metis = a.metis;
+        if (a.stop === true) item.status = 'やめた';
+        return { ok: true, data: openView(x, req) };
+      },
+      memo: function (x) {
+        var text = typeof x.args.text === 'string' ? x.args.text : '';
+        if (text.length > 200) return { ok: false, error: 'メモは200文字までです' };
+        var req = findForCls(x, x.args.id);
+        if (!req) return { ok: false, error: MSG_NOT_FOUND };
+        req.memo = text;
+        return { ok: true, data: { memo: text } };
+      },
+      cancel: function (x) {
+        var req = findForCls(x, x.args.id);
+        if (!req) return { ok: false, error: MSG_NOT_FOUND };
+        var res = cancelReq(x, req);
+        if (res.error) return { ok: false, error: res.error };
+        return { ok: true, data: {} };
+      },
+      text: function (x) {
+        var kind = x.args.kind;
+        if (kind !== 'send' && kind !== 'remind') return { ok: false, error: 'badrequest' };
+        var req = findForCls(x, x.args.id);
+        if (!req) return { ok: false, error: MSG_NOT_FOUND };
+        if (req.status !== '未回答') return { ok: false, error: 'この申込は未回答ではありません' };
+        var vals = messageVals_(x.c.name, req.student, linkText(req.id), nextBankDay(req.withdraw), T);
+        return { ok: true, data: { text: buildMessage(kind === 'send' ? SEND_LINES : REMIND_LINES, vals) } };
+      }
+    };
+
+    // 本文 {api, idToken, op, cls, args, clientKey} を受けて、{ok, data}／{ok:false, error} を返す（ログインは確かめない）
+    function handle(body) {
+      body = body && typeof body === 'object' ? body : {};
+      var op = typeof body.op === 'string' ? body.op : '';
+      if (!Object.prototype.hasOwnProperty.call(OPS, op)) return { ok: false, error: 'badrequest' };
+      var args = body.args && typeof body.args === 'object' ? body.args : {};
+      var cls = typeof body.cls === 'string' ? body.cls.trim().toUpperCase() : '';
+      if (!cls) cls = me.home; // 本物と同じ：cls が空ならその人の教室
+      if (me.classes.indexOf(cls) < 0 || !classes[cls]) return { ok: false, error: MSG_NO_CLASS };
+      var write = WRITE_OPS.indexOf(op) >= 0;
+      var ck = write && typeof body.clientKey === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.clientKey) ?
+        op + '|' + cls + '|' + body.clientKey : '';
+      if (ck && cache[ck]) return JSON.parse(cache[ck]);
+      var res = OPS[op]({ cls: cls, c: classes[cls], args: args });
+      var out = JSON.stringify(res); // 日付は持ち出さない（本物と同じく JSON で渡す）
+      if (ck && res.ok === true && !(res.data && res.data.needConfirm)) cache[ck] = out;
+      return JSON.parse(out);
+    }
+    return { handle: handle, today: T };
+  }
+
+  // ---- お試し用に Logic.gs・Sheets.gs から写した部品 ----
+  function isFilled_(v) {
+    if (v === null || v === undefined || v === '') return false;
+    if (Object.prototype.toString.call(v) === '[object Date]') return !isNaN(v.getTime());
+    return true;
+  }
+  function makeRequestId(classCode, rand) {
+    var s = '';
+    for (var i = 0; i < 10; i++) {
+      var idx = Math.floor(rand() * REQUEST_ID_CHARS.length);
+      if (idx >= REQUEST_ID_CHARS.length) idx = REQUEST_ID_CHARS.length - 1;
+      if (idx < 0) idx = 0;
+      s += REQUEST_ID_CHARS.charAt(idx);
+    }
+    return classCode + '-' + s;
+  }
+  function parseRequestId(id) {
+    if (typeof id !== 'string') return null;
+    var m = /^([A-Z])-([abcdefghjkmnpqrstuvwxyz23456789]{10})$/.exec(id);
+    if (!m) return null;
+    if (CLASS_CODES.indexOf(m[1]) < 0) return null;
+    return { classCode: m[1] };
+  }
+  function buildItems(codes, master) {
+    var items = [];
+    var unknown = [];
+    var seen = Object.create(null);
+    for (var i = 0; i < codes.length; i++) {
+      var c = String(codes[i] === null || codes[i] === undefined ? '' : codes[i]).trim();
+      if (c === '' || seen[c]) continue;
+      seen[c] = true;
+      var m = Object.prototype.hasOwnProperty.call(master, c) ? master[c] : null;
+      if (!m || typeof m.price !== 'number' || !isFinite(m.price)) unknown.push(c);
+      else items.push({ code: c, name: m.name, price: m.price });
+    }
+    var error = null;
+    if (items.length + unknown.length > MAX_ITEMS) error = '教材は18冊までです';
+    return { items: items, unknown: unknown, error: error };
+  }
+  function findDuplicateNames(names) {
+    var count = Object.create(null);
+    var dups = [];
+    for (var i = 0; i < names.length; i++) {
+      var n = String(names[i] === null || names[i] === undefined ? '' : names[i]).trim();
+      if (n === '') continue;
+      count[n] = (count[n] || 0) + 1;
+      if (count[n] === 2) dups.push(n);
+    }
+    return dups;
+  }
+  function requestView(req, today) {
+    var view = { label: '', color: 'none', isNew: false, unhanded: 0, metisLeft: 0, cancelled: false };
+    var status = req.status;
+    if (status === '取り消し') {
+      view.label = '取り消し'; view.color = 'gray'; view.cancelled = true;
+      return view;
+    }
+    var isNew = isFilled_(req.appliedAt) && !isFilled_(req.seenAt);
+    if (status === '申し込まない') {
+      view.label = '申し込まない'; view.color = 'gray'; view.isNew = isNew;
+      return view;
+    }
+    if (status === '申し込む') {
+      var items = req.items || [];
+      var stopped = 0;
+      var buying = 0;
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (it.status === 'やめた') {
+          stopped += 1;
+        } else if (it.status === '買う') {
+          buying += 1;
+          if (!isFilled_(it.handed)) view.unhanded += 1;
+          else if (!it.metis) view.metisLeft += 1;
+        }
+      }
+      if (stopped > 0 && buying === 0) {
+        view.label = '取り消し（申込後）'; view.color = 'gray'; view.cancelled = true;
+        return view;
+      }
+      view.label = '申込済';
+      view.isNew = isNew;
+      if (view.metisLeft > 0) view.color = 'red';
+      else if (view.unhanded > 0) view.color = 'orange';
+      return view;
+    }
+    view.label = '未回答';
+    var sent = req.sent;
+    if (isFilled_(sent) && Object.prototype.toString.call(sent) === '[object Date]') {
+      var days = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) -
+        Date.UTC(sent.getFullYear(), sent.getMonth(), sent.getDate())) / 86400000);
+      if (days >= 3) {
+        view.label = '未回答（' + days + '日）';
+        view.color = 'yellow';
+      }
+    }
+    return view;
+  }
+  function newestFirst_(a, b) {
+    var ta = isFilled_(a.sent) && Object.prototype.toString.call(a.sent) === '[object Date]' ? a.sent.getTime() : -Infinity;
+    var tb = isFilled_(b.sent) && Object.prototype.toString.call(b.sent) === '[object Date]' ? b.sent.getTime() : -Infinity;
+    if (ta !== tb) return ta < tb ? 1 : -1;
+    return b.row - a.row;
+  }
+  function buildMessage(lines, vals) {
+    return lines.map(function (line) {
+      for (var k in vals) line = String(line).split(k).join(vals[k]);
+      return line;
+    }).join('\n');
+  }
+  function messageVals_(className, student, url, withdraw, today) {
+    var name = String(student).replace(/[（(][^（()）]*[)）]\s*$/, '').trim() || student;
+    var m = withdraw.getMonth() + 1;
+    var deadline = new Date(withdraw.getFullYear(), withdraw.getMonth(), 10);
+    var byDeadline = today.getTime() <= deadline.getTime() ? m + '月10日までに' : 'お早めに';
+    return { '{教室}': className, '{生徒}': name, '{リンク}': url, '{引落}': m + '月' + withdraw.getDate() + '日', '{締切まで}': byDeadline };
+  }
+
+  return {
+    MAX_ITEMS: MAX_ITEMS,
+    withdrawDate: withdrawDate, isJapaneseHoliday: isJapaneseHoliday, nextBankDay: nextBankDay, dateLabelJa: dateLabelJa,
+    monthChoices: monthChoices, pickPatternFor: pickPatternFor, targetMatches: targetMatches, normalizeQuery: normalizeQuery,
+    newClientKey: newClientKey, yen: yen, addOne: addOne, setPicks: setPicks, formatDate: formatDate, createMockApi: createMockApi
+  };
+})();
+</script>
+
+<script id="ui">
+// 画面の動き
+(function () {
+  'use strict';
+  var L = AppLogic;
+  var MOCK = /(^|[?&])mock=1(&|$)/.test(location.search.slice(1));
+  var NO_SET = '';
+  var MSG_RELOGIN = 'もう一度ログインしてください';
+  var MSG_NO_USER = 'このアカウントでは使えません';
+  var MSG_NETWORK = '通信できませんでした。少したってから、もう一度押してください';
+  var MSG_FAIL = 'うまくいきませんでした。少したってから、もう一度お試しください';
+
+  // 画面の中だけに持つもの（IDトークンはここだけ。localStorage などには入れない）
+  var S = {
+    token: null, email: '', loaded: false, gisReady: false,
+    cls: '', clsNames: {}, me: null, loadSeq: 0,
+    students: [], dupSet: {}, sets: [], favorites: [], master: [], masterMap: {}, pickPattern: null,
+    view: 'make',
+    // 作る
+    studentText: '', student: '', grade: '', history: [], bought: {}, historyOpen: false, historySeq: 0,
+    month: '', setName: NO_SET, items: [], query: '', searchMode: 'grade', searchSet: '',
+    creating: false, createKey: null, confirmKey: null, confirm: null, created: null, studentChecked: false,
+    // 一覧
+    list: [], listTime: '', listSeq: 0,
+    openId: '', detail: null, detailErr: '', detailBusy: false, detailMsg: null, detailText: null,
+    stopAsk: 0, cancelAsk: false, memoDraft: {}, openSeq: 0
+  };
+  var mock = MOCK ? L.createMockApi(new Date()) : null;
+
+  // ---- 小さな部品 ----
+  function $(id) { return document.getElementById(id); }
+  function h(tag, props, kids) {
+    var e = document.createElement(tag);
+    if (props) {
+      for (var k in props) {
+        if (!Object.prototype.hasOwnProperty.call(props, k)) continue;
+        var v = props[k];
+        if (k === 'text') e.textContent = v;
+        else if (k === 'class') e.className = v;
+        else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+        else if (k === 'hidden' || k === 'disabled' || k === 'checked' || k === 'value') e[k] = v;
+        else if (v !== null && v !== undefined && v !== false) e.setAttribute(k, v === true ? '' : String(v));
+      }
+    }
+    (kids || []).forEach(function (c) {
+      if (c === null || c === undefined || c === false) return;
+      e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+    return e;
+  }
+  function clear(e) { while (e.firstChild) e.removeChild(e.firstChild); }
+  function say(el, text, kind) {
+    el.textContent = text || '';
+    el.className = 'msg ' + (kind || 'info');
+    el.hidden = !text;
+  }
+  // サーバーの言葉が日本語の文でなければ（'badrequest' など）、決まった文にする
+  function jaError(msg) {
+    if (typeof msg === 'string' && /[ぁ-んァ-ヶ一-龠]/.test(msg)) return msg;
+    return MSG_FAIL;
+  }
+  function timeNow() {
+    var d = new Date();
+    return d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
+
+  // ---- 通信：本文 {api:'staff', idToken, op, cls, args, clientKey}（text/plain。ヘッダーにトークンは付けない）----
+  function send(op, args, clientKey) {
+    var body = { api: 'staff', idToken: S.token, op: op, cls: S.cls, args: args || {} };
+    if (clientKey) body.clientKey = clientKey;
+    var p = MOCK ? mockSend(body) : realSend(body, clientKey ? 60000 : 30000);
+    return p.then(function (res) {
+      if (!res || typeof res !== 'object') res = { ok: false, error: MSG_FAIL };
+      if (res.relogin) needRelogin();
+      return res;
+    });
+  }
+  function realSend(body, timeoutMs) {
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+    var opts = {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // preflight を起こさない
+      body: JSON.stringify(body), credentials: 'omit', redirect: 'follow'
+    };
+    if (ctrl) opts.signal = ctrl.signal;
+    return fetch(API_URL, opts).then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).catch(function () {
+      if (timer) clearTimeout(timer);
+      return { ok: false, error: MSG_NETWORK, network: true };
+    });
+  }
+  // お試し：少し待ってから偽の API が答える
+  function mockSend(body) {
+    var wait = body.op === 'create' ? 700 : 250 + Math.floor(Math.random() * 300);
+    return new Promise(function (resolve) {
+      setTimeout(function () { resolve(mock.handle(JSON.parse(JSON.stringify(body)))); }, wait);
+    });
+  }
+
+  // ---- 大きな枠の切り替え ----
+  function showPane(name) {
+    ['loading', 'setup', 'login', 'error'].forEach(function (p) { $('pane-' + p).hidden = p !== name; });
+    var app = name === 'app';
+    $('view-make').hidden = !app || S.view !== 'make';
+    $('view-list').hidden = !app || S.view !== 'list';
+    $('cls-box').hidden = !app;
+    $('tabs').hidden = !app;
+    $('refresh').hidden = !app;
+  }
+  function showError(text) {
+    $('error-text').textContent = text;
+    showPane('error');
+  }
+
+  // ---- ログイン（Google Identity Services）----
+  function loadGis() {
+    var s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.onload = initGis;
+    s.onerror = function () {
+      showError('Googleのログインを読み込めませんでした。ネットにつながっているか確かめて、ページを開き直してください。');
+    };
+    document.head.appendChild(s);
+  }
+  function initGis() {
+    if (!window.google || !google.accounts || !google.accounts.id) {
+      showError('Googleのログインを読み込めませんでした。ページを開き直してください。');
+      return;
+    }
+    google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCredential, auto_select: true, cancel_on_tap_outside: false });
+    S.gisReady = true;
+    showLogin('教室のGmailでログインしてください。', false);
+    google.accounts.id.prompt();
+  }
+  function renderGisButton(el) {
+    clear(el);
+    if (!S.gisReady) return;
+    google.accounts.id.renderButton(el, { type: 'standard', theme: 'outline', size: 'large', text: 'signin_with', locale: 'ja', width: 300 });
+  }
+  function showLogin(text, again) {
+    $('login-text').textContent = text;
+    $('login-again').hidden = !again;
+    renderGisButton($('login-btn'));
+    showPane('login');
+  }
+  // ほかのGmailを選んだ：トークンを捨てて、選び直してもらう
+  function showWrongAccount() {
+    S.token = null;
+    S.email = '';
+    renderWho();
+    if (S.gisReady) google.accounts.id.disableAutoSelect();
+    showLogin('このアカウントでは使えません。教室のGmailを選んでください。', true);
+  }
+  // 期限切れ：入力は残したまま、上に「もう一度ログイン」を出す
+  function needRelogin() {
+    if (MOCK) return;
+    if (!S.loaded) {
+      showLogin('もう一度ログインしてください。', false);
+      return;
+    }
+    $('banner').hidden = false;
+    renderGisButton($('relogin-btn'));
+    window.scrollTo(0, 0);
+  }
+  function onCredential(resp) {
+    if (!resp || typeof resp.credential !== 'string') return;
+    S.token = resp.credential;
+    S.email = emailOf(resp.credential);
+    renderWho();
+    if (S.loaded) {
+      $('banner').hidden = true;
+      refreshList(true);
+      if (S.view === 'make') say($('create-msg'), 'ログインしました。続けて操作できます（「作る」はもう一度押してください）', 'ok');
+      return;
+    }
+    loadClass(''); // その人の教室（home）を開く
+  }
+  // 表示用にトークンの中のメールを読む（確かめるのはサーバー）
+  function emailOf(token) {
+    try {
+      var p = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (p.length % 4) p += '=';
+      var bin = atob(p);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return String(JSON.parse(new TextDecoder().decode(bytes)).email || '');
+    } catch (e) {
+      return '';
+    }
+  }
+  function renderWho() {
+    $('who').textContent = MOCK ? '' : (S.email ? 'ログイン中：' + S.email : '');
+  }
+
+  // ---- 教室を読む（init と list を同時に）。cls が '' ならサーバーがその人の教室（home）を開く ----
+  function loadClass(cls) {
+    showPane('loading');
+    var my = ++S.loadSeq;
+    S.cls = cls;
+    var pInit = send('init', {});
+    var pList = send('list', {});
+    pInit.then(function (res) {
+      if (my !== S.loadSeq) return;
+      if (res.ok && res.data) {
+        applyInit(res.data);
+        showPane('app');
+        pList.then(function (lr) { if (my === S.loadSeq) applyList(lr); });
+        return;
+      }
+      if (res.relogin) return; // needRelogin が出している
+      if (res.error === MSG_NO_USER) return showWrongAccount();
+      showError(jaError(res.error)); // 教室の表がまだない など（サーバーの文）
+    });
+  }
+  // init の中身を入れる（生徒一覧・セット・よく使う教材・教材マスタ）
+  function takeInit(d) {
+    S.loaded = true;
+    S.me = d.me || { home: d.cls.code, classes: [d.cls.code] };
+    S.cls = d.cls.code;
+    S.clsNames[d.cls.code] = d.cls.name;
+    S.students = d.students || [];
+    S.dupSet = {};
+    (d.duplicates || []).forEach(function (n) { S.dupSet[n] = true; });
+    S.sets = d.sets || [];
+    S.favorites = d.favorites || [];
+    S.master = (d.master || []).map(function (m) {
+      return { code: String(m.code), name: String(m.name), price: Number(m.price) || 0, target: String(m.target || ''),
+        key: L.normalizeQuery(m.code + ' ' + m.name) };
+    });
+    S.masterMap = {};
+    S.master.forEach(function (m) { S.masterMap[m.code] = m; });
+    S.pickPattern = d.pickPattern || null;
+  }
+  function applyInit(d) {
+    takeInit(d);
+    S.list = [];
+    S.openId = '';
+    S.detail = null;
+    resetForm(false);
+    renderHeader();
+    renderStudentOptions();
+    renderMonths();
+    renderSets();
+    renderMake();
+    renderList();
+  }
+  // 「更新」：init と list を読み直す。作りかけの入力は残す（生徒一覧・セットなどだけ差しかえる）
+  function refreshAll() {
+    if (S.creating) return;
+    var my = ++S.loadSeq;
+    var c = S.cls;
+    var done = function () { S.refreshing = false; $('refresh').disabled = S.creating; };
+    S.refreshing = true;
+    $('refresh').disabled = true;
+    say($('list-msg'), '読み込んでいます…', 'info');
+    var pInit = send('init', {});
+    var pList = send('list', {});
+    pInit.then(function (res) {
+      if (my !== S.loadSeq || S.cls !== c) { done(); return; }
+      if (res.ok && res.data && res.data.cls && res.data.cls.code === c) {
+        takeInit(res.data);
+        if (!S.sets.some(function (s) { return s.name === S.setName; })) S.setName = NO_SET;
+        renderHeader();
+        renderStudentOptions();
+        renderMonths();
+        renderSets();
+        matchStudent(); // 表に足したばかりの生徒なら、ここで見つかる
+        renderMake();
+      } else if (res.error === MSG_NO_USER) {
+        showWrongAccount();
+      } else if (!res.ok && !res.relogin) {
+        say($('create-msg'), '生徒一覧などを読み直せませんでした：' + jaError(res.error), 'error');
+      }
+      return pList.then(function (lr) {
+        done();
+        if (my === S.loadSeq && S.cls === c) applyList(lr);
+      });
+    });
+  }
+  function applyList(res) {
+    if (res.ok && Array.isArray(res.data)) {
+      S.list = res.data;
+      S.listTime = timeNow();
+      say($('list-msg'), '');
+      if (S.openId && !findRow(S.openId)) { S.openId = ''; S.detail = null; }
+    } else if (!res.relogin) {
+      say($('list-msg'), '一覧を読めませんでした：' + jaError(res.error), 'error');
+    }
+    renderList();
+    renderHeader();
+  }
+  function refreshList(quiet) {
+    var c = S.cls;
+    var my = ++S.listSeq;
+    if (!quiet) say($('list-msg'), '読み込んでいます…', 'info');
+    return send('list', {}).then(function (res) {
+      if (S.cls !== c || my !== S.listSeq) return;
+      applyList(res);
+    });
+  }
+
+  // ---- 上の帯 ----
+  function renderHeader() {
+    $('mock-badge').hidden = !MOCK;
+    var classes = (S.me && S.me.classes) || [];
+    var sel = $('cls-switch');
+    if (classes.length > 1) {
+      clear(sel);
+      classes.forEach(function (code) {
+        sel.appendChild(h('option', { value: code, text: S.clsNames[code] || ('教室' + code) }));
+      });
+      sel.value = S.cls;
+      sel.hidden = false;
+      $('cls-name').hidden = true;
+    } else {
+      sel.hidden = true;
+      $('cls-name').hidden = false;
+      $('cls-name').textContent = S.clsNames[S.cls] || '';
+    }
+    var n = S.list.filter(function (r) { return r.view && r.view.isNew; }).length;
+    $('new-count').textContent = String(n);
+    $('tab-make').className = 'tab' + (S.view === 'make' ? ' on' : '');
+    $('tab-list').className = 'tab' + (S.view === 'list' ? ' on' : '');
+    renderWho();
+  }
+  function setView(v) {
+    S.view = v;
+    $('view-make').hidden = v !== 'make';
+    $('view-list').hidden = v !== 'list';
+    renderHeader();
+    if (v === 'list') renderList();
+  }
+
+  // ================= 作る =================
+
+  function resetForm(keepMonth) {
+    S.studentText = '';
+    S.student = '';
+    S.grade = '';
+    S.history = [];
+    S.bought = {};
+    S.historyOpen = false;
+    S.historySeq++;
+    if (!keepMonth) S.month = '';
+    S.setName = NO_SET;
+    S.items = [];
+    S.query = '';
+    S.createKey = null;
+    S.confirmKey = null;
+    S.confirm = null;
+    S.created = null;
+    S.studentChecked = false;
+    $('student').value = '';
+    $('search').value = '';
+    $('set').value = NO_SET;
+    $('month').value = S.month;
+    say($('create-msg'), '');
+    say($('set-msg'), '');
+    renderResult(); // 前の教室・前の生徒の送る文を残さない
+  }
+  // 生徒・月・教材を変えた：前の送る文は消す（古い文を送らないように）。押すごとの印も新しくする
+  function formChanged() {
+    S.createKey = null;
+    S.confirmKey = null;
+    S.confirm = null;
+    say($('create-msg'), '');
+    if (S.created) {
+      S.created = null;
+      renderResult();
+    }
+  }
+
+  function renderStudentOptions() {
+    var dl = $('student-list');
+    clear(dl);
+    S.students.forEach(function (s) { dl.appendChild(h('option', { value: s.name, label: s.grade })); });
+    var dups = Object.keys(S.dupSet);
+    var note = $('dup-note');
+    note.hidden = dups.length === 0;
+    note.textContent = dups.length ? '生徒一覧に同じ名前が2人います：' + dups.join('、') + '（この名前では作れません。表で片方の名前に印を付けて貼り直してください）' : '';
+  }
+  // 打っているあいだ（変換中も）は「生徒一覧にいない名前です」を出さない。出すのは欄を離れたとき
+  function onStudentInput() {
+    S.studentChecked = false;
+    matchStudent();
+    renderMake();
+  }
+  function onStudentLeave() {
+    S.studentChecked = true;
+    matchStudent();
+    renderMake();
+  }
+  // 打った名前を生徒一覧と照らす（生徒が変わったら前の送る文を消して、前に買った教材を読む）
+  function matchStudent() {
+    var text = $('student').value.trim();
+    S.studentText = text;
+    var found = null;
+    for (var i = 0; i < S.students.length; i++) if (S.students[i].name === text) { found = S.students[i]; break; }
+    var name = found ? found.name : '';
+    if (name !== S.student) {
+      S.student = name;
+      S.grade = found ? found.grade : '';
+      S.history = [];
+      S.bought = {};
+      S.historyOpen = false;
+      formChanged();
+      loadHistory();
+    }
+  }
+  // 前に買った教材（明細の「買う」「やめた」。新しい申込が先）
+  function loadHistory() {
+    var my = ++S.historySeq;
+    var name = S.student;
+    if (!name || S.dupSet[name]) return;
+    send('history', { student: name }).then(function (res) {
+      if (my !== S.historySeq || name !== S.student) return;
+      if (!res.ok || !Array.isArray(res.data)) return;
+      S.history = res.data;
+      S.bought = {};
+      res.data.forEach(function (x) { if (!(x.code in S.bought)) S.bought[x.code] = x.dateLabel || ''; });
+      renderMake();
+    });
+  }
+  function boughtNote(code) {
+    if (!(code in S.bought)) return null;
+    return h('span', { class: 'bought', text: '前に買っています' + (S.bought[code] ? '（' + S.bought[code] + '）' : '') });
+  }
+  function renderStep1() {
+    $('student-grade').textContent = S.grade;
+    var msg = '';
+    if (S.student && S.dupSet[S.student]) msg = '同じ名前が2人います：' + S.student + '。片方の名前に印を付けて貼り直してください';
+    else if (S.studentText && !S.student && S.studentChecked) {
+      msg = '生徒一覧にいない名前です。候補から選んでください（表に足したばかりなら、上の「更新」を押してください）';
+    }
+    $('student-msg').textContent = msg;
+    $('student-msg').hidden = !msg;
+    var tg = $('history-toggle');
+    tg.hidden = !S.student || !!S.dupSet[S.student];
+    tg.textContent = '前に買った：' + S.history.length + '冊' + (S.history.length ? (S.historyOpen ? ' ▲' : ' ▼') : '');
+    tg.disabled = S.history.length === 0;
+    var box = $('history-box');
+    clear(box);
+    box.hidden = !(S.historyOpen && S.history.length);
+    S.history.forEach(function (x) {
+      box.appendChild(h('li', null, [x.name, h('span', { class: 'code', text: x.code }), '　' + (x.dateLabel || '')]));
+    });
+  }
+
+  function renderMonths() {
+    var sel = $('month');
+    clear(sel);
+    sel.appendChild(h('option', { value: '', text: '選んでください' }));
+    S.months = L.monthChoices(new Date());
+    S.months.forEach(function (m) { sel.appendChild(h('option', { value: String(m.month), text: m.label })); });
+    if (!S.months.some(function (m) { return String(m.month) === S.month; })) S.month = '';
+    sel.value = S.month;
+  }
+  function renderStep2() {
+    var m = null;
+    (S.months || []).forEach(function (x) { if (String(x.month) === S.month) m = x; });
+    $('withdraw-label').textContent = m ? '引き落とし日：' + m.withdrawLabel : '';
+  }
+
+  function renderSets() {
+    var sel = $('set');
+    clear(sel);
+    sel.appendChild(h('option', { value: NO_SET, text: '（セットを使わない）' }));
+    S.sets.forEach(function (s) { sel.appendChild(h('option', { value: s.name, text: s.name + '（' + s.codes.length + '冊）' })); });
+    sel.value = S.setName;
+  }
+  // セットを選んだ：教材をそのセットの中身にする（「使わない」は今の教材をそのまま）
+  function onSetChange() {
+    if (S.creating) { $('set').value = S.setName; return; }
+    var name = $('set').value;
+    S.setName = name;
+    if (name === NO_SET) {
+      say($('set-msg'), '');
+      return;
+    }
+    var set = null;
+    S.sets.forEach(function (s) { if (s.name === name) set = s; });
+    if (!set) return;
+    var items = [];
+    var missing = [];
+    set.codes.forEach(function (code) {
+      var m = S.masterMap[code];
+      if (!m) { missing.push(code); return; }
+      if (items.length < L.MAX_ITEMS) items.push({ code: m.code, name: m.name, price: m.price, kind: '必須' });
+    });
+    S.items = items;
+    var note = 'セットの中身を「4 教材」に入れました。';
+    if (missing.length) note += '教材マスタにないコードは入れていません：' + missing.join('、');
+    say($('set-msg'), note, missing.length ? 'error' : 'info');
+    formChanged();
+    renderMake();
+  }
+
+  function hasItem(code) { return S.items.some(function (it) { return it.code === code; }); }
+  // 1冊足す（今の教材は残す。18冊まで。同じ教材は足さない）
+  function addItem(code) {
+    if (S.creating) return;
+    var next = L.addOne(S.items, S.masterMap[code]);
+    if (next === S.items) return;
+    S.items = next;
+    formChanged();
+    renderMake();
+  }
+  function removeItem(code) {
+    if (S.creating) return;
+    S.items = S.items.filter(function (it) { return it.code !== code; });
+    formChanged();
+    renderMake();
+  }
+  function setKind(code, kind) {
+    if (S.creating) return;
+    S.items.forEach(function (it) { if (it.code === code) it.kind = kind; });
+    formChanged();
+    renderMake();
+  }
+  function renderItems() {
+    var box = $('chosen-box');
+    clear(box);
+    if (!S.items.length) {
+      box.appendChild(h('p', { class: 'empty', text: 'まだ教材がありません。セットを選ぶか、下の「よく使う教材」「探す」から足してください。' }));
+      $('chosen-sum').textContent = '';
+      return;
+    }
+    var tb = h('tbody');
+    S.items.forEach(function (it, i) {
+      var seg = h('div', { class: 'seg', role: 'group', 'aria-label': '区分' }, [
+        h('button', { type: 'button', class: 'req' + (it.kind === '必須' ? ' on' : ''), text: '必須', 'aria-pressed': it.kind === '必須' ? 'true' : 'false',
+          disabled: S.creating, onclick: function () { setKind(it.code, '必須'); } }),
+        h('button', { type: 'button', class: 'rec' + (it.kind === 'おすすめ' ? ' on' : ''), text: 'おすすめ', 'aria-pressed': it.kind === 'おすすめ' ? 'true' : 'false',
+          disabled: S.creating, onclick: function () { setKind(it.code, 'おすすめ'); } })
+      ]);
+      tb.appendChild(h('tr', null, [
+        h('td', { class: 'no', text: String(i + 1) }),
+        h('td', null, [it.name, h('span', { class: 'code', text: it.code }), boughtNote(it.code)]),
+        h('td', { class: 'price', text: L.yen(it.price) }),
+        h('td', null, [seg]),
+        h('td', { style: 'width:44px' }, [h('button', { type: 'button', class: 'x', title: '外す', 'aria-label': it.name + 'を外す', text: '×',
+          disabled: S.creating, onclick: function () { removeItem(it.code); } })])
+      ]));
+    });
+    box.appendChild(h('table', { class: 'chosen' }, [
+      h('thead', null, [h('tr', null, [h('th', { text: '' }), h('th', { text: '教材' }), h('th', { class: 'price', text: '値段' }), h('th', { text: '区分' }), h('th', { text: '' })])]),
+      tb
+    ]));
+    var total = 0;
+    var req = 0;
+    S.items.forEach(function (it) { total += it.price; if (it.kind === '必須') req += 1; });
+    var left = L.MAX_ITEMS - S.items.length;
+    $('chosen-sum').textContent = S.items.length + '冊（必須 ' + req + '・おすすめ ' + (S.items.length - req) + '）　合計 ' + L.yen(total) +
+      '　' + (left > 0 ? 'あと' + left + '冊まで足せます' : '18冊までです。これ以上は足せません');
+  }
+  function pickLine(m) {
+    var full = S.items.length >= L.MAX_ITEMS;
+    var inList = hasItem(m.code);
+    return h('li', null, [
+      h('span', { class: 'p-name' }, [m.name, h('span', { class: 'code', text: m.code }), boughtNote(m.code)]),
+      h('span', { class: 'p-price', text: L.yen(m.price) }),
+      h('button', { type: 'button', class: 'btn btn-sm', text: inList ? '入っています' : '足す', disabled: inList || full || S.creating,
+        onclick: function () { addItem(m.code); } })
+    ]);
+  }
+  function gradePattern() {
+    if (!S.grade || !S.pickPattern) return null;
+    return L.pickPatternFor(S.grade, S.pickPattern);
+  }
+  function renderPickers() {
+    var pat = gradePattern();
+    // よく使う教材（学年でしぼる）
+    var fav = $('fav-list');
+    clear(fav);
+    var favs = S.favorites.map(function (c) { return S.masterMap[c]; }).filter(function (m) { return !!m; });
+    var shown = favs.filter(function (m) { return !pat || L.targetMatches(m.target, pat); });
+    shown.forEach(function (m) { fav.appendChild(pickLine(m)); });
+    var note = '';
+    if (!S.favorites.length) note = '教室の表の「よく使う教材」シートで登録します';
+    else if (!shown.length) note = 'この学年に合うよく使う教材はありません';
+    else if (pat) note = S.grade + 'に合うものだけ';
+    else note = '生徒を選ぶと学年でしぼります';
+    $('fav-note').textContent = note;
+    // 探す（名前・コード。学年でしぼる／全部）、セットから（ほかのセットの教材を1冊ずつ足す）
+    var modes = { grade: 'filter-grade', all: 'filter-all', set: 'filter-set' };
+    Object.keys(modes).forEach(function (k) {
+      $(modes[k]).className = S.searchMode === k ? 'on' : '';
+      $(modes[k]).setAttribute('aria-pressed', S.searchMode === k ? 'true' : 'false');
+    });
+    var setMode = S.searchMode === 'set';
+    $('search').hidden = setMode;
+    $('search-set').hidden = !setMode;
+    var list = $('search-list');
+    clear(list);
+    if (setMode) {
+      renderSetPicks(list);
+      return;
+    }
+    var q = L.normalizeQuery(S.query);
+    var sn = '';
+    if (q) {
+      var spat = S.searchMode === 'grade' ? pat : null;
+      var hits = S.master.filter(function (m) { return m.key.indexOf(q) >= 0 && (!spat || L.targetMatches(m.target, spat)); });
+      hits.slice(0, 30).forEach(function (m) { list.appendChild(pickLine(m)); });
+      if (!hits.length) sn = '見つかりません。' + (spat ? '「全部」にすると、ほかの学年の教材も探せます。' : '');
+      else if (hits.length > 30) sn = 'ほか ' + (hits.length - 30) + '件。もっと文字を打つとしぼれます。';
+    } else {
+      sn = S.searchMode === 'grade' && !pat ? '生徒を選ぶと学年でしぼれます。' : '教材名やコードの一部を打ってください。';
+    }
+    $('search-note').textContent = sn;
+  }
+  // 「セットから」：選んだセットの中身を並べる（足すのは1冊ずつ。今の教材・3 のセットは変えない）
+  function renderSetPicks(list) {
+    var sel = $('search-set');
+    clear(sel);
+    sel.appendChild(h('option', { value: '', text: 'セットを選んでください' }));
+    S.sets.forEach(function (s) { sel.appendChild(h('option', { value: s.name, text: s.name + '（' + s.codes.length + '冊）' })); });
+    if (!S.sets.some(function (s) { return s.name === S.searchSet; })) S.searchSet = '';
+    sel.value = S.searchSet;
+    sel.disabled = S.creating;
+    var set = null;
+    S.sets.forEach(function (s) { if (s.name === S.searchSet) set = s; });
+    if (!set) {
+      $('search-note').textContent = S.sets.length ? 'セットを選ぶと、中の教材を1冊ずつ足せます。' : 'セットは教室の表の「セット」シートで登録します。';
+      return;
+    }
+    L.setPicks(set, S.masterMap, S.items).forEach(function (p) {
+      if (p.missing) {
+        list.appendChild(h('li', null, [h('span', { class: 'p-name muted', text: 'マスタにない教材（' + p.code + '）' })]));
+      } else {
+        list.appendChild(pickLine(S.masterMap[p.code]));
+      }
+    });
+    $('search-note').textContent = '足すと「必須」で入ります。今の教材はそのまま残ります。';
+  }
+
+  // 作るのに足りないもの
+  function problems() {
+    var p = [];
+    if (!S.student) p.push(S.studentText ? '生徒（候補から選ぶ）' : '生徒');
+    if (!S.month) p.push('引き落とし月');
+    if (!S.items.length) p.push('教材');
+    return p;
+  }
+  function renderCreate() {
+    var p = problems();
+    var dup = S.student && S.dupSet[S.student];
+    var btn = $('create');
+    btn.disabled = S.creating || p.length > 0 || !!dup || !!S.confirm;
+    btn.textContent = S.creating ? '作っています…' : '作る';
+    $('create-hint').textContent = S.creating ? '' : (p.length ? 'あと：' + p.join('・') + 'を選ぶと押せます' : (dup ? '同じ名前の生徒は作れません' : ''));
+    var cf = $('confirm');
+    cf.hidden = !S.confirm;
+    if (S.confirm) {
+      $('confirm-text').textContent = '前の未回答の申込' + (S.confirm.sentLabel ? '（' + S.confirm.sentLabel + '）' : '') + 'を取り消して作りますか？';
+      $('confirm-yes').disabled = S.creating;
+      $('confirm-yes').textContent = S.creating ? '作っています…' : '取り消して作る';
+      $('confirm-no').disabled = S.creating;
+    }
+  }
+  // 作っているあいだは 1〜4・教室の切り替え・更新を止める（返事の前に入力が変わらないように）
+  function lockMake() {
+    var on = S.creating;
+    ['student', 'month', 'set', 'search', 'filter-grade', 'filter-all', 'filter-set', 'search-set', 'cls-switch', 'next'].forEach(function (id) { $(id).disabled = on; });
+    if (on) $('refresh').disabled = true;
+    else if (!S.refreshing) $('refresh').disabled = false;
+  }
+  // 送った入力の印（返事が来たとき、入力が同じか比べる）
+  function formKey() {
+    return JSON.stringify([S.cls, S.student, S.month, S.items.map(function (it) { return it.code + '/' + it.kind; })]);
+  }
+  function doCreate(cancelPrevious) {
+    if (S.creating || problems().length || S.dupSet[S.student]) return;
+    var snap = formKey();
+    var who = S.student;
+    // 押し直し・ログインし直しのあとは同じ印（二重に作らない）。取り消して作るときは新しい印
+    var key;
+    if (cancelPrevious) key = S.confirmKey || (S.confirmKey = L.newClientKey());
+    else key = S.createKey || (S.createKey = L.newClientKey());
+    var args = {
+      student: S.student, month: Number(S.month),
+      items: S.items.map(function (it) { return { code: it.code, kind: it.kind }; }),
+      cancelPrevious: !!cancelPrevious
+    };
+    var c = S.cls;
+    S.creating = true;
+    say($('create-msg'), '');
+    renderMake();
+    send('create', args, key).then(function (res) {
+      S.creating = false;
+      if (S.cls !== c) return;
+      if (formKey() !== snap) {
+        // 入力が変わっていたら、前の入力の結果は出さない（ちがう生徒の送る文をコピーしないように）
+        S.createKey = null;
+        S.confirmKey = null;
+        S.confirm = null;
+        if (res.ok && res.data && !res.data.needConfirm) {
+          say($('create-msg'), who + 'さんの申込はできました。入力が変わったので、送る文は「一覧」で行を開き「送る文をもう一度コピー」で出してください', 'info');
+          refreshList(true);
+        } else {
+          say($('create-msg'), '入力が変わったので、もう一度「作る」を押してください', 'info');
+        }
+        renderMake();
+        return;
+      }
+      if (res.ok && res.data && res.data.needConfirm) {
+        S.createKey = null;
+        S.confirmKey = null;
+        S.confirm = res.data.needConfirm;
+      } else if (res.ok && res.data) {
+        S.createKey = null;
+        S.confirmKey = null;
+        S.confirm = null;
+        S.created = res.data;
+        renderResult();
+        refreshList(true);
+        $('step6').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (res.relogin) {
+        say($('create-msg'), 'ログインの期限が切れました。上の「Googleでログイン」で入り直してから、もう一度「作る」を押してください', 'error');
+      } else {
+        say($('create-msg'), jaError(res.error), 'error');
+      }
+      renderMake();
+    });
+  }
+  function renderResult() {
+    var d = S.created;
+    $('result').hidden = !d;
+    $('result-empty').hidden = !!d;
+    $('step6').className = 'step' + (d ? '' : ' off');
+    $('copy-msg').hidden = true;
+    if (!d) {
+      $('send-text').value = '';
+      return;
+    }
+    $('result-sum').textContent = 'できました：' + d.student + 'さん　' + d.count + '冊（必須 ' + d.reqCount + '・おすすめ ' + d.recCount + '）　合計 ' +
+      d.totalLabel + '　引き落とし ' + d.withdrawLabel;
+    $('send-text').value = d.sendText || '';
+  }
+  // コピー：だめなら文を選んだ状態にして Ctrl＋C を頼む
+  function copyText(textarea, msgEl) {
+    var text = textarea.value;
+    var timer = null;
+    var ok = function () {
+      say(msgEl, 'コピーしました', 'ok');
+      if (msgEl._timer) clearTimeout(msgEl._timer);
+      timer = setTimeout(function () { msgEl.hidden = true; }, 2000);
+      msgEl._timer = timer;
+    };
+    var ng = function () {
+      textarea.focus();
+      textarea.select();
+      if (msgEl._timer) clearTimeout(msgEl._timer);
+      say(msgEl, 'Ctrl＋Cでコピーしてください', 'error');
+    };
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        navigator.clipboard.writeText(text).then(ok, ng);
+      } catch (e) {
+        ng();
+      }
+    } else {
+      ng();
+    }
+  }
+  function renderMake() {
+    renderStep1();
+    renderStep2();
+    renderItems();
+    renderPickers();
+    renderCreate();
+    lockMake();
+  }
+
+  // ================= 一覧 =================
+
+  function findRow(id) {
+    for (var i = 0; i < S.list.length; i++) if (S.list[i].id === id) return S.list[i];
+    return null;
+  }
+  function monthOf(label) {
+    var m = /^(\d+)年(\d+)月/.exec(label || '');
+    return m ? m[1] + '年' + m[2] + '月' : '';
+  }
+  function passFilter(r) {
+    var v = r.view || {};
+    if (r.id === S.openId) return true; // 開いている行は、取り消した直後なども消さない
+    if (v.cancelled && !$('f-cancel').checked) return false;
+    var st = $('f-status').value;
+    if (st === 'none' && r.status !== '未回答') return false;
+    if (st === 'new' && !v.isNew) return false;
+    if (st === 'unhanded' && !(v.unhanded > 0)) return false;
+    if (st === 'metis' && !(v.metisLeft > 0)) return false;
+    var mo = $('f-month').value;
+    if (mo && monthOf(r.withdrawLabel) !== mo) return false;
+    var q = L.normalizeQuery($('f-name').value);
+    if (q && L.normalizeQuery(r.student).indexOf(q) < 0) return false;
+    return true;
+  }
+  function renderMonthFilter() {
+    var sel = $('f-month');
+    var cur = sel.value;
+    var months = [];
+    S.list.forEach(function (r) { var m = monthOf(r.withdrawLabel); if (m && months.indexOf(m) < 0) months.push(m); });
+    months.sort(function (a, b) {
+      var pa = /^(\d+)年(\d+)月/.exec(a), pb = /^(\d+)年(\d+)月/.exec(b);
+      return (Number(pb[1]) * 12 + Number(pb[2])) - (Number(pa[1]) * 12 + Number(pa[2]));
+    });
+    clear(sel);
+    sel.appendChild(h('option', { value: '', text: 'すべて' }));
+    months.forEach(function (m) { sel.appendChild(h('option', { value: m, text: m })); });
+    sel.value = months.indexOf(cur) >= 0 ? cur : '';
+  }
+  function renderList() {
+    renderMonthFilter();
+    $('list-time').textContent = S.listTime ? S.listTime + ' に読み込みました' : '';
+    var body = $('list-body');
+    clear(body);
+    var rows = S.list.filter(passFilter);
+    rows.forEach(function (r) {
+      var v = r.view || {};
+      var open = r.id === S.openId;
+      var tr = h('tr', { class: 'r' + (v.color && v.color !== 'none' ? ' c-' + v.color : '') + (open ? ' open' : ''), tabindex: '0',
+        'aria-expanded': open ? 'true' : 'false',
+        onclick: function () { openRow(r.id); },
+        onkeydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(r.id); } } }, [
+        h('td', { class: 'nw', text: r.sentLabel || '' }),
+        h('td', { class: 'nw' }, [r.student]),
+        h('td', { class: 'nw', text: r.grade || '' }),
+        h('td', { class: 'nw', text: r.withdrawLabel || '' }),
+        h('td', { class: 'nw' }, [v.label || r.status, v.isNew ? h('span', { class: 'new', text: '新しい' }) : null]),
+        h('td', { class: 'nw', text: v.unhanded > 0 ? v.unhanded + '冊' : '' }),
+        h('td', { class: 'nw', text: v.metisLeft > 0 ? v.metisLeft + '冊' : '' }),
+        h('td', { class: 'memo', text: r.memo || '', title: r.memo || '' })
+      ]);
+      body.appendChild(tr);
+      if (open) {
+        var td = h('td', { colspan: '8' });
+        renderDetail(td);
+        body.appendChild(h('tr', { class: 'detail' }, [td]));
+      }
+    });
+    var empty = $('list-empty');
+    empty.hidden = rows.length > 0;
+    empty.textContent = S.list.length ? '条件に合う申込はありません。' : 'まだ申込はありません。';
+  }
+  function patchRow(d) {
+    var r = findRow(d.id);
+    if (!r) return;
+    r.view = d.view;
+    r.status = d.status;
+    r.memo = d.memo;
+  }
+  function openRow(id) {
+    if (S.openId === id) {
+      S.openId = '';
+      S.detail = null;
+      renderList();
+      return;
+    }
+    S.openId = id;
+    S.detail = null;
+    S.detailErr = '';
+    S.detailMsg = null;
+    S.detailText = null;
+    S.stopAsk = 0;
+    S.cancelAsk = false;
+    renderList();
+    loadDetail(id);
+  }
+  function loadDetail(id) {
+    var my = ++S.openSeq;
+    send('open', { id: id }).then(function (res) {
+      if (my !== S.openSeq || S.openId !== id) return;
+      if (res.ok && res.data) {
+        S.detail = res.data;
+        S.detailErr = '';
+        patchRow(res.data);
+      } else {
+        S.detailErr = res.relogin ? 'ログインし直してから、もう一度行を押してください' : jaError(res.error);
+      }
+      renderList();
+      renderHeader();
+    });
+  }
+  // 中で押したもの（書く op）。終わったら中と行を新しくする
+  function detailWrite(op, args, done) {
+    if (S.detailBusy) return;
+    var id = S.openId;
+    S.detailBusy = true;
+    S.detailMsg = null;
+    renderList();
+    send(op, args, L.newClientKey()).then(function (res) {
+      S.detailBusy = false;
+      if (S.openId !== id) return;
+      if (res.ok) {
+        done(res.data);
+      } else {
+        S.detailMsg = { kind: 'error', text: res.relogin ? 'ログインし直してから、もう一度押してください' : jaError(res.error) };
+      }
+      renderList();
+      renderHeader();
+    });
+  }
+  function itemUpdate(row, patch) {
+    var args = { id: S.openId, row: row };
+    for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) args[k] = patch[k];
+    detailWrite('updateItem', args, function (d) {
+      S.detail = d;
+      S.stopAsk = 0;
+      patchRow(d);
+    });
+  }
+  function saveMemo() {
+    var id = S.openId;
+    var text = S.memoDraft[id] !== undefined ? S.memoDraft[id] : (S.detail.memo || '');
+    if (text.length > 200) {
+      S.detailMsg = { kind: 'error', text: 'メモは200文字までです' };
+      renderList();
+      return;
+    }
+    detailWrite('memo', { id: id, text: text }, function (d) {
+      delete S.memoDraft[id];
+      if (S.detail) S.detail.memo = d.memo;
+      var r = findRow(id);
+      if (r) r.memo = d.memo;
+      S.detailMsg = { kind: 'ok', text: 'メモを保存しました' };
+    });
+  }
+  function cancelRequest() {
+    var id = S.openId;
+    detailWrite('cancel', { id: id }, function () {
+      S.cancelAsk = false;
+      S.detailText = null;
+      S.detailMsg = { kind: 'ok', text: '取り消しました' };
+      loadDetail(id);
+      refreshList(true);
+    });
+  }
+  // 送る文・催促の文を読んで、コピーする
+  function fetchText(kind) {
+    if (S.detailBusy) return;
+    var id = S.openId;
+    S.detailBusy = true;
+    S.detailMsg = null;
+    renderList();
+    send('text', { id: id, kind: kind }).then(function (res) {
+      S.detailBusy = false;
+      if (S.openId !== id) return;
+      if (res.ok && res.data) {
+        S.detailText = { kind: kind, text: res.data.text };
+      } else {
+        S.detailMsg = { kind: 'error', text: res.relogin ? 'ログインし直してから、もう一度押してください' : jaError(res.error) };
+      }
+      renderList();
+      if (S.detailText) {
+        var ta = $('detail-text');
+        if (ta) copyText(ta, $('detail-copy-msg'));
+      }
+    });
+  }
+  function renderDetail(td) {
+    var box = h('div', { class: 'd-box' });
+    td.appendChild(box);
+    if (S.detailErr) {
+      box.appendChild(h('p', { class: 'msg error', text: S.detailErr }));
+      return;
+    }
+    var d = S.detail;
+    if (!d) {
+      box.appendChild(h('p', { class: 'muted', text: '読み込んでいます…' }));
+      return;
+    }
+    var busy = S.detailBusy;
+    var v = d.view || {};
+    box.appendChild(h('div', { class: 'd-info' }, [
+      h('strong', { text: d.student + (d.grade ? '（' + d.grade + '）' : '') }),
+      h('span', { text: '状態：' + (v.label || d.status) }),
+      d.sentLabel ? h('span', { text: '送った日：' + d.sentLabel }) : null,
+      h('span', { text: '引き落とし：' + (d.withdrawLabel || '') }),
+      d.appliedAtLabel ? h('span', { text: '申し込んだ日時：' + d.appliedAtLabel }) : null,
+      d.parentName ? h('span', { text: '保護者：' + d.parentName }) : null
+    ]));
+
+    // 教材（渡した日・METIS・やめるは「買う」の教材だけ）
+    var tb = h('tbody');
+    (d.items || []).forEach(function (it) {
+      var buy = it.status === '買う';
+      var handed;
+      if (!buy) handed = [it.handed || '—'];
+      else if (it.handed) handed = [it.handed + ' ', h('button', { type: 'button', class: 'btn-link small', text: '消す', disabled: busy,
+        onclick: function (e) { e.stopPropagation(); itemUpdate(it.row, { handed: '' }); } })];
+      else handed = [h('button', { type: 'button', class: 'btn btn-sm', text: '今日', disabled: busy,
+        onclick: function (e) { e.stopPropagation(); itemUpdate(it.row, { handed: 'today' }); } })];
+      var metis = buy ? [h('label', { class: 'check' }, [
+        h('input', { type: 'checkbox', checked: !!it.metis, disabled: busy,
+          onchange: function (e) { itemUpdate(it.row, { metis: e.target.checked }); } }), '入力済み'])] : [it.metis ? '入力済み' : '—'];
+      var stop = [];
+      if (buy) {
+        if (S.stopAsk === it.row) {
+          stop = [h('span', { text: 'やめますか？ ' }),
+            h('button', { type: 'button', class: 'btn btn-sm btn-danger', text: 'やめる', disabled: busy,
+              onclick: function () { itemUpdate(it.row, { stop: true }); } }), ' ',
+            h('button', { type: 'button', class: 'btn btn-sm', text: '戻る', disabled: busy,
+              onclick: function () { S.stopAsk = 0; renderList(); } })];
+        } else {
+          stop = [h('button', { type: 'button', class: 'btn btn-sm', text: 'やめる', disabled: busy,
+            onclick: function () { S.stopAsk = it.row; renderList(); } })];
+        }
+      }
+      tb.appendChild(h('tr', { class: it.status === 'やめた' || it.status === '買わない' ? 'stopped' : '' }, [
+        h('td', null, [it.name, h('span', { class: 'code', text: it.code })]),
+        h('td', { class: 'nw', text: it.priceLabel }),
+        h('td', { class: 'nw', text: it.kind }),
+        h('td', { class: 'nw', text: it.status }),
+        h('td', { class: 'nw' }, handed),
+        h('td', { class: 'nw' }, metis),
+        h('td', { class: 'nw' }, stop)
+      ]));
+    });
+    box.appendChild(h('div', { class: 'table-wrap' }, [h('table', { class: 'd-items' }, [
+      h('thead', null, [h('tr', null, ['教材', '値段', '区分', '状態', '渡した日', 'METIS', ''].map(function (t) { return h('th', { text: t }); }))]),
+      tb
+    ])]));
+
+    // 下：メモ と 押すもの
+    var id = d.id;
+    var draft = S.memoDraft[id] !== undefined ? S.memoDraft[id] : (d.memo || '');
+    var counter = h('span', { class: 'counter', text: draft.length + '／200文字' });
+    var memo = h('div', null, [
+      h('h3', { text: 'メモ' }),
+      h('textarea', { rows: '3', maxlength: '200', value: draft, 'aria-label': 'メモ',
+        oninput: function (e) { S.memoDraft[id] = e.target.value; counter.textContent = e.target.value.length + '／200文字'; } }),
+      h('div', { class: 'row', style: 'margin-top:6px' }, [
+        h('button', { type: 'button', class: 'btn btn-sm', text: 'メモを保存', disabled: busy, onclick: saveMemo }), counter
+      ])
+    ]);
+    var acts = h('div', { class: 'd-actions' });
+    var canCancel = d.status === '未回答' || (d.status === '申し込む' && !v.cancelled);
+    if (d.status === '未回答') {
+      acts.appendChild(h('button', { type: 'button', class: 'btn', text: '送る文をもう一度コピー', disabled: busy, onclick: function () { fetchText('send'); } }));
+      if (v.color === 'yellow') {
+        acts.appendChild(h('button', { type: 'button', class: 'btn', text: '催促の文をコピー', disabled: busy, onclick: function () { fetchText('remind'); } }));
+      }
+    }
+    if (canCancel && !S.cancelAsk) {
+      acts.appendChild(h('button', { type: 'button', class: 'btn', text: '取り消す', disabled: busy, onclick: function () { S.cancelAsk = true; renderList(); } }));
+    }
+    var right = h('div', null, [h('h3', { text: 'この申込' }), acts]);
+    if (canCancel && S.cancelAsk) {
+      right.appendChild(h('div', { class: 'confirm' }, [
+        h('p', { text: d.status === '未回答' ?
+          'この申込を取り消しますか？保護者がリンクを開くと「取り消されました」と出ます。' :
+          'この申込を取り消しますか？申し込まれた教材は全部「やめた」になります（保護者の控えは変わりません）。' }),
+        h('div', { class: 'row' }, [
+          h('button', { type: 'button', class: 'btn btn-danger', text: '取り消す', disabled: busy, onclick: cancelRequest }),
+          h('button', { type: 'button', class: 'btn', text: 'やめる', disabled: busy, onclick: function () { S.cancelAsk = false; renderList(); } })
+        ])
+      ]));
+    }
+    if (S.detailText) {
+      right.appendChild(h('div', { style: 'margin-top:12px' }, [
+        h('p', { class: 'small muted', style: 'margin:0 0 4px', text: S.detailText.kind === 'send' ? '送る文' : '催促の文' }),
+        h('textarea', { id: 'detail-text', rows: '8', readonly: true, value: S.detailText.text }),
+        h('div', { class: 'row', style: 'margin-top:6px' }, [
+          h('button', { type: 'button', class: 'btn', text: 'もう一度コピー', onclick: function () { copyText($('detail-text'), $('detail-copy-msg')); } }),
+          h('span', { id: 'detail-copy-msg', class: 'msg ok', hidden: true })
+        ])
+      ]));
+    }
+    if (!acts.firstChild && !S.cancelAsk) acts.appendChild(h('span', { class: 'muted', text: 'ここで押すものはありません' }));
+    box.appendChild(h('div', { class: 'd-grid' }, [memo, right]));
+    if (S.detailMsg) box.appendChild(h('p', { class: 'msg ' + S.detailMsg.kind, text: S.detailMsg.text }));
+    if (busy) box.appendChild(h('p', { class: 'muted', text: '送っています…' }));
+  }
+
+  // ================= つなぐ =================
+  $('tab-make').addEventListener('click', function () { setView('make'); });
+  $('tab-list').addEventListener('click', function () { setView('list'); });
+  $('refresh').addEventListener('click', refreshAll);
+  $('cls-switch').addEventListener('change', function (e) {
+    var code = e.target.value;
+    if (code === S.cls) return;
+    if (S.creating) { e.target.value = S.cls; return; }
+    S.openId = '';
+    S.detail = null;
+    loadClass(code);
+  });
+  $('login-again').addEventListener('click', function () {
+    if (!S.gisReady) return;
+    google.accounts.id.disableAutoSelect();
+    google.accounts.id.prompt();
+  });
+  $('student').addEventListener('input', onStudentInput);
+  $('student').addEventListener('change', onStudentLeave);
+  $('student').addEventListener('blur', onStudentLeave);
+  $('history-toggle').addEventListener('click', function () { S.historyOpen = !S.historyOpen; renderStep1(); });
+  $('month').addEventListener('change', function (e) { S.month = e.target.value; formChanged(); renderMake(); });
+  $('set').addEventListener('change', onSetChange);
+  $('search').addEventListener('input', function (e) { S.query = e.target.value; renderPickers(); });
+  $('filter-grade').addEventListener('click', function () { S.searchMode = 'grade'; renderPickers(); });
+  $('filter-all').addEventListener('click', function () { S.searchMode = 'all'; renderPickers(); });
+  $('filter-set').addEventListener('click', function () { S.searchMode = 'set'; renderPickers(); });
+  $('search-set').addEventListener('change', function (e) { S.searchSet = e.target.value; renderPickers(); });
+  $('create').addEventListener('click', function () { doCreate(false); });
+  $('confirm-yes').addEventListener('click', function () { doCreate(true); });
+  $('confirm-no').addEventListener('click', function () { S.confirm = null; S.confirmKey = null; renderCreate(); });
+  $('copy').addEventListener('click', function () { copyText($('send-text'), $('copy-msg')); });
+  $('next').addEventListener('click', function () {
+    resetForm(true);
+    renderMake();
+    renderResult();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('student').focus();
+  });
+  ['f-status', 'f-month', 'f-cancel'].forEach(function (id) { $(id).addEventListener('change', renderList); });
+  $('f-name').addEventListener('input', renderList);
+
+  // ---- はじめ ----
+  renderHeader();
+  if (MOCK) {
+    S.token = 'mock';
+    loadClass('');
+  } else if (!API_URL || !CLIENT_ID) {
+    showPane('setup');
+  } else {
+    loadGis();
+  }
+})();
+</script>
+</body>
+</html>
