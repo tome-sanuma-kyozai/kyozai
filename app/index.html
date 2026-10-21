@@ -121,32 +121,61 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
   .filters { display: flex; gap: 14px 20px; flex-wrap: wrap; align-items: center; }
   .filters label { display: inline-flex; align-items: center; gap: 6px; }
   #f-name { width: 180px; }
+  /* 次にやることの色（一覧の行・札・凡例・中身で共通）：--bd 枠、--bg 地、--fg 文字、--tag 札の文字 */
+  .c-red { --bd: #E24B4A; --bg: #FCEBEB; --fg: #791F1F; --tag: #fff; }
+  .c-purple { --bd: #7F77DD; --bg: #EEEDFE; --fg: #3C3489; --tag: #fff; }
+  .c-blue { --bd: #378ADD; --bg: #E6F1FB; --fg: #0C447C; --tag: #fff; }
+  .c-pink { --bd: #D4537E; --bg: #FBEAF0; --fg: #72243E; --tag: #fff; }
+  .c-green { --bd: #639922; --bg: #EAF3DE; --fg: #27500A; --tag: #fff; }
+  .c-orange { --bd: #EF9F27; --bg: #FAEEDA; --fg: #633806; --tag: #412402; }
+  .c-none { --bd: #D3D1C7; --bg: #fff; --fg: #2C2C2A; --tag: #444441; }
+  .c-gray { --bd: #B4B2A9; --bg: #F1EFE8; --fg: #5F5E5A; --tag: #2C2C2A; }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0 0; font-size: 14px; color: #3c4043; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
-  .sw { display: inline-block; width: 18px; height: 14px; border-radius: 3px; border-left: 4px solid; }
-  .sw.red { background: #f4cccc; border-color: #d93025; }
-  .sw.orange { background: #fce5cd; border-color: #e8710a; }
-  .sw.yellow { background: #fff2cc; border-color: #f9ab00; }
-  .sw.gray { background: #e8eaed; border-color: #9aa0a6; }
+  .legend-note { margin: 6px 0 0; font-size: 13px; }
+  .sw { display: inline-block; width: 22px; height: 16px; border-radius: 4px; background: var(--bg); border: 3px solid var(--bd); }
+  .next { display: inline-block; padding: 2px 12px; border-radius: 999px; font-size: 14px; font-weight: bold; white-space: nowrap;
+    background: var(--bd); color: var(--tag); }
+  .c-none .next { background: #fff; border: 1px solid var(--bd); }
   .table-wrap { overflow-x: auto; margin-top: 12px; }
   .list th, .list td { padding: 10px 10px; text-align: left; border-bottom: 1px solid #e3e5e8; vertical-align: middle; }
-  .list th { font-size: 14px; color: #5f6368; font-weight: normal; white-space: nowrap; }
-  .list tbody tr.r { cursor: pointer; border-left: 5px solid transparent; }
+  .list th { font-size: 14px; color: #5f6368; font-weight: normal; white-space: nowrap; border-bottom: 0; padding-bottom: 0; }
+  /* 行ごとに枠と地の色（行のあいだを少しあける） */
+  table.list { border-collapse: separate; border-spacing: 0 6px; }
+  .list tbody tr.r { cursor: pointer; }
+  .list tbody tr.r td { background: var(--bg); color: var(--fg); border-top: 3px solid var(--bd); border-bottom: 3px solid var(--bd); }
+  .list tbody tr.r td:first-child { border-left: 3px solid var(--bd); border-radius: 10px 0 0 10px; }
+  .list tbody tr.r td:last-child { border-right: 3px solid var(--bd); border-radius: 0 10px 10px 0; }
+  .list tbody tr.r.open td:first-child { border-bottom-left-radius: 0; }
+  .list tbody tr.r.open td:last-child { border-bottom-right-radius: 0; }
   .list tbody tr.r:hover td { filter: brightness(.97); }
-  .list tr.c-red td { background: #f4cccc; } .list tr.c-red { border-left-color: #d93025; }
-  .list tr.c-orange td { background: #fce5cd; } .list tr.c-orange { border-left-color: #e8710a; }
-  .list tr.c-yellow td { background: #fff2cc; } .list tr.c-yellow { border-left-color: #f9ab00; }
-  .list tr.c-gray td { background: #e8eaed; color: #5f6368; } .list tr.c-gray { border-left-color: #9aa0a6; }
   .list tr.open td { font-weight: bold; }
-  .list td.memo { min-width: 120px; color: #3c4043; font-size: 15px; }
+  .list td.memo { min-width: 120px; font-size: 15px; }
   .list td.nw { white-space: nowrap; }
+  .list td.next-cell { text-align: right; white-space: nowrap; }
   .new { display: inline-block; margin-left: 6px; padding: 0 8px; font-size: 13px; font-weight: bold; color: #fff; background: #1a73e8; border-radius: 999px; }
-  tr.detail > td { background: #fff; padding: 0; border-bottom: 2px solid #1a73e8; }
-  .d-box { padding: 16px 18px 20px; border-left: 5px solid #1a73e8; }
-  .d-info { display: flex; flex-wrap: wrap; gap: 4px 22px; margin-bottom: 12px; }
+  tr.detail > td { background: #fff; padding: 0; border: 3px solid var(--bd); border-top: 0; border-radius: 0 0 10px 10px; }
+  .d-box { padding: 16px 18px 20px; }
+  .d-info { display: flex; flex-wrap: wrap; gap: 4px 22px; margin-bottom: 12px; align-items: center; }
   .d-items td, .d-items th { padding: 8px; border-bottom: 1px solid #e3e5e8; text-align: left; vertical-align: middle; }
   .d-items th { font-size: 14px; color: #5f6368; font-weight: normal; white-space: nowrap; }
   .d-items .stopped td { color: #80868b; }
+  .d-sec { margin: 14px 0 0; }
+  .d-sec h3 { margin: 0 0 4px; font-size: 17px; }
+  .d-steps th.st { text-align: center; color: var(--fg); background: var(--bg); border-top: 3px solid var(--bd); white-space: normal; min-width: 96px; font-weight: bold; }
+  .d-steps td.st { text-align: center; }
+  .d-steps td.st.todo { background: var(--bg); }
+  .d-steps tr.bulk td { background: #f8f9fa; font-size: 14px; }
+  .d-steps td.sel, .d-steps th.sel { width: 36px; text-align: center; }
+  .d-steps input[type=date], .date-bar input[type=date] { padding: 4px 6px; border: 1px solid #c9ced6; border-radius: 6px; background: #fff; }
+  .date-bar { margin: 4px 0 6px; gap: 10px; }
+  .date-hint { display: block; color: #b3261e; white-space: normal; }
+  .kind { display: inline-block; font-size: 12px; color: #5f6368; border: 1px solid #dadce0; border-radius: 6px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+  .d-drop { margin-top: 16px; padding: 10px 14px; background: #F1EFE8; border: 1px solid #B4B2A9; border-radius: 10px; color: #5F5E5A; }
+  .d-drop h3 { color: #5F5E5A; font-size: 15px; }
+  .d-drop td, .d-drop th { color: #5F5E5A; border-bottom-color: #dcdad2; }
+  .d-drop tr.need-cleanup td { background: #FCEBEB; color: #791F1F; }
+  .d-drop .cleanup-text { color: #A32D2D; font-weight: bold; }
   .d-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; }
   .d-actions { display: flex; flex-wrap: wrap; gap: 10px; }
   .counter { font-size: 13px; color: #5f6368; }
@@ -332,10 +361,14 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
         <label>状態
           <select id="f-status">
             <option value="">すべて</option>
-            <option value="none">未回答</option>
+            <option value="todo">やることがある</option>
             <option value="new">新しい</option>
-            <option value="unhanded">未渡しあり</option>
-            <option value="metis">METIS未入力あり</option>
+            <option value="billed">① 請求作成がまだ</option>
+            <option value="ordered">② 在庫確認・発注がまだ</option>
+            <option value="handed">③ 渡すのがまだ</option>
+            <option value="metis">④ 引き渡し日がまだ</option>
+            <option value="remind">催促する</option>
+            <option value="none">未回答</option>
           </select>
         </label>
         <label>引き落とし <select id="f-month"><option value="">すべて</option></select></label>
@@ -345,16 +378,21 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
         <span id="list-time" class="small muted"></span>
       </div>
       <p class="legend">
-        <span><i class="sw red"></i>METIS未入力</span>
-        <span><i class="sw orange"></i>未渡し</span>
-        <span><i class="sw yellow"></i>未回答（送って3日）</span>
-        <span><i class="sw gray"></i>申し込まない・取り消し</span>
+        <span class="c-red"><i class="sw"></i>① METISで請求作成／やめた教材の請求を消す</span>
+        <span class="c-purple"><i class="sw"></i>② 在庫確認・発注</span>
+        <span class="c-blue"><i class="sw"></i>③ 届いたら渡す</span>
+        <span class="c-pink"><i class="sw"></i>④ METISに引き渡し日</span>
+        <span class="c-green"><i class="sw"></i>済み</span>
+        <span class="c-orange"><i class="sw"></i>催促する（送って3日・未回答）</span>
+        <span class="c-none"><i class="sw"></i>返事待ち</span>
+        <span class="c-gray"><i class="sw"></i>申し込まない・取り消し</span>
         <span><b class="new" style="margin:0">新しい</b>保護者が答えて、まだ開いていない</span>
       </p>
+      <p class="legend-note muted">色は、「買う」の教材のうち、いちばん前で止まっている段階（① → ② → ③ → ④）。行を押すと中身が開きます。</p>
       <p id="list-msg" class="msg" hidden></p>
       <div class="table-wrap">
         <table class="list">
-          <thead><tr><th>送った日</th><th>生徒</th><th>学年</th><th>引き落とし</th><th>状態</th><th>未渡し</th><th>METIS未</th><th>メモ</th></tr></thead>
+          <thead><tr><th>送った日</th><th>生徒</th><th>学年</th><th>引き落とし</th><th>状態</th><th>メモ</th><th style="text-align:right">次にやること</th></tr></thead>
           <tbody id="list-body"></tbody>
         </table>
       </div>
@@ -531,7 +569,8 @@ var AppLogic = (function () {
 
     var MSG_NO_CLASS = 'この教室は開けません';
     var MSG_NOT_FOUND = 'この申込は見つかりません';
-    var WRITE_OPS = ['create', 'updateItem', 'memo', 'cancel'];
+    var WRITE_OPS = ['create', 'updateItem', 'bulk', 'memo', 'cancel'];
+    var STAGES = ['billed', 'ordered', 'handed', 'metis'];
     var MASTER = [
       { code: 'M001', name: '中1 数学 基礎ワーク', price: 1650, target: '中学生' },
       { code: 'M002', name: '中1 英語 基礎ワーク', price: 1650, target: '中学生' },
@@ -599,7 +638,7 @@ var AppLogic = (function () {
       for (var i = 0; i < c.students.length; i++) if (c.students[i].name === name) return c.students[i].grade;
       return '';
     }
-    // item：[コード, 区分, 状態, 渡した日（何日前）, METIS]
+    // item：[コード, 区分, 状態, ③ 渡した日（何日前）, ④ METIS引き渡し日, ① 請求作成, ② 在庫確認・発注, 後始末済み]（①②がないのは前の明細＝まだ）
     function addReq(c, r) {
       var id;
       do { id = makeRequestId(c.code, rand); } while (findReq(c, id));
@@ -614,20 +653,35 @@ var AppLogic = (function () {
         c.items.push({
           row: c.nextItem++, id: id, student: r.student, code: x[0], name: m.name, price: m.price,
           status: x[2] || '未回答', handed: (x[3] === undefined || x[3] === null) ? '' : ago(x[3]),
-          metis: x[4] === true, kind: x[1] === 'おすすめ' ? 'おすすめ' : '必須'
+          metis: x[4] === true, kind: x[1] === 'おすすめ' ? 'おすすめ' : '必須',
+          billed: x[5] === true, ordered: x[6] === true, cleaned: x[7] === true
         });
       });
       return req;
     }
 
     // ---- 架空の申込（行の色・状態がひととおり出るように）----
+    // 緑（済み）・ピンク（④）・灰（申し込まない・取り消し）・橙（催促）・赤（①・新しい）・白（返事待ち）・紫（②）・青（③）・前の明細（①②が空）の赤
     var A = classes.A;
+    addReq(A, { student: '生徒D', sent: ago(60), withdraw: wdOf(-1), status: '申し込む', appliedAt: ago(59, 20, 0),
+      parentName: '生徒Dの保護者', seenAt: ago(58), memo: '前の形のときの申込（①②の印がない）',
+      items: [['M003', '必須', '買う', 50, true], ['M004', '必須', '買う', 50, true]] });
     addReq(A, { student: '生徒A', sent: ago(40), withdraw: wdOf(0), status: '申し込む', appliedAt: ago(39, 20, 15),
       parentName: '生徒Aの保護者', seenAt: ago(38),
-      items: [['M001', '必須', '買う', 30, true], ['M002', '必須', '買う', 30, true]] });
+      items: [['M001', '必須', '買う', 30, true, true, true], ['M002', '必須', '買う', 30, true, true, true]] });
     addReq(A, { student: '生徒D', sent: ago(20), withdraw: wdOf(0), status: '申し込む', appliedAt: ago(19, 21, 5),
       parentName: '生徒Dの保護者', seenAt: ago(18),
-      items: [['M007', '必須', '買う', 6, false], ['M008', '必須', '買う', 6, true], ['M009', 'おすすめ', '買わない']] });
+      items: [['M007', '必須', '買う', 6, false, true, true], ['M008', '必須', '買う', 6, true, true, true], ['M009', 'おすすめ', '買わない']] });
+    addReq(A, { student: '生徒E', sent: ago(15), withdraw: wdOf(1), status: '申し込む', appliedAt: ago(14, 18, 0),
+      parentName: '生徒Eの保護者', seenAt: ago(13),
+      items: [['M010', '必須', '買う', null, false, true, true], ['M011', '必須', '買う', null, false, true, true], ['M012', 'おすすめ', 'やめた', null, false, false, false]] });
+    // ①②を済ませてから取り消した（取り消し（申込後））：METISの請求を消す・発注を取り消す（赤）
+    addReq(A, { student: '生徒C', sent: ago(25), withdraw: wdOf(0), status: '申し込む', appliedAt: ago(24, 20, 10),
+      parentName: '生徒Cの保護者', seenAt: ago(23), memo: '①②のあとで取り消し',
+      items: [['M001', '必須', 'やめた', null, false, true, true], ['M002', '必須', 'やめた', null, false, true, false]] });
+    addReq(A, { student: '生徒F', sent: ago(12), withdraw: wdOf(1), status: '申し込む', appliedAt: ago(11, 21, 30),
+      parentName: '生徒Fの保護者', seenAt: ago(10),
+      items: [['M003', '必須', '買う', null, false, true, true], ['M004', '必須', '買う', null, false, true, false], ['M006', 'おすすめ', '買わない']] });
     addReq(A, { student: '生徒E', sent: ago(9), withdraw: wdOf(1), status: '申し込まない', appliedAt: ago(8, 19, 30),
       parentName: '生徒Eの保護者', seenAt: ago(7),
       items: [['M010', '必須', '買わない'], ['M011', 'おすすめ', '買わない']] });
@@ -662,8 +716,10 @@ var AppLogic = (function () {
         appliedAtLabel: formatDate(req.appliedAt, 'yyyy年M月d日 H:mm'), parentName: req.parentName,
         view: viewOf(x, req),
         items: itemsOf(x.c, req.id).map(function (it) {
-          return { row: it.row, code: it.code, name: it.name, priceLabel: yen(it.price), kind: it.kind, status: it.status,
-            handed: formatDate(it.handed, 'M月d日'), metis: it.metis };
+          return { row: it.row, code: it.code, name: it.name, price: it.price, priceLabel: yen(it.price), kind: it.kind, status: it.status,
+            billed: it.billed === true, ordered: it.ordered === true, handed: formatDate(it.handed, 'M月d日'),
+            handedDate: isoDate_(it.handed), metis: it.metis === true,
+            cleaned: it.cleaned === true, needsCleanup: needsCleanup_(it) };
         }),
         memo: req.memo
       };
@@ -774,13 +830,62 @@ var AppLogic = (function () {
         var item = null;
         itemsOf(x.c, req.id).forEach(function (it) { if (it.row === row) item = it; });
         if (!item) return { ok: false, error: 'この教材は見つかりません' };
-        if (a.handed !== undefined && a.handed !== 'today' && a.handed !== '') return { ok: false, error: 'badrequest' };
+        var handedDate = null;
+        if (a.handed !== undefined && a.handed !== 'today' && a.handed !== '') {
+          if (typeof a.handed !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(a.handed)) return { ok: false, error: 'badrequest' };
+          var hd = parseHandedDate(a.handed, T);
+          if (!hd.ok) return { ok: false, error: hd.error };
+          handedDate = hd.date;
+        }
         if (a.metis !== undefined && typeof a.metis !== 'boolean') return { ok: false, error: 'badrequest' };
+        if (a.billed !== undefined && typeof a.billed !== 'boolean') return { ok: false, error: 'badrequest' };
+        if (a.ordered !== undefined && typeof a.ordered !== 'boolean') return { ok: false, error: 'badrequest' };
+        if (a.cleaned !== undefined && typeof a.cleaned !== 'boolean') return { ok: false, error: 'badrequest' };
         if (a.stop === true && item.status !== '買う') return { ok: false, error: 'この教材はやめられません' };
+        if (typeof a.cleaned === 'boolean' && item.status !== 'やめた') return { ok: false, error: 'やめた教材だけ「消した」にできます' };
+        if (typeof a.cleaned === 'boolean') item.cleaned = a.cleaned;
+        if (typeof a.billed === 'boolean') item.billed = a.billed;
+        if (typeof a.ordered === 'boolean') item.ordered = a.ordered;
         if (a.handed === 'today') item.handed = new Date(T.getTime());
+        else if (handedDate) item.handed = handedDate;
         else if (a.handed === '') item.handed = '';
         if (typeof a.metis === 'boolean') item.metis = a.metis;
         if (a.stop === true) item.status = 'やめた';
+        return { ok: true, data: openView(x, req) };
+      },
+      bulk: function (x) {
+        var a = x.args;
+        var stage = typeof a.stage === 'string' ? a.stage : '';
+        if (STAGES.indexOf(stage) < 0) return { ok: false, error: 'badrequest' };
+        var pick = null;
+        var date = null;
+        if (stage === 'handed' && (a.date !== undefined || a.rows !== undefined)) {
+          if (typeof a.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(a.date)) return { ok: false, error: 'badrequest' };
+          if (!Array.isArray(a.rows) || a.rows.length === 0 || a.rows.length > 50) return { ok: false, error: '渡した日を入れる教材を選んでください' };
+          var hd = parseHandedDate(a.date, T);
+          if (!hd.ok) return { ok: false, error: hd.error };
+          date = hd.date;
+          pick = Object.create(null);
+          for (var k = 0; k < a.rows.length; k++) {
+            if (typeof a.rows[k] !== 'number' || Math.floor(a.rows[k]) !== a.rows[k]) return { ok: false, error: 'badrequest' };
+            pick[a.rows[k]] = true;
+          }
+        }
+        var req = findForCls(x, a.id);
+        if (!req) return { ok: false, error: MSG_NOT_FOUND };
+        var its = itemsOf(x.c, req.id);
+        if (pick) {
+          var buyRows = Object.create(null);
+          its.forEach(function (it) { if (it.status === '買う') buyRows[it.row] = true; });
+          for (var pr in pick) if (!buyRows[pr]) return { ok: false, error: 'この教材は見つかりません' };
+        }
+        its.forEach(function (it) {
+          if (it.status !== '買う') return;
+          if (stage === 'handed') {
+            if (pick) { if (pick[it.row]) it.handed = new Date(date.getTime()); }
+            else if (!isFilled_(it.handed)) it.handed = new Date(T.getTime());
+          } else it[stage] = true;
+        });
         return { ok: true, data: openView(x, req) };
       },
       memo: function (x) {
@@ -880,16 +985,63 @@ var AppLogic = (function () {
     }
     return dups;
   }
+  // Logic.gs の requestView と同じ（色と次にやること。いちばん先は やめた教材の後始末、そのあと①→②→③→④のいちばん前で止まっている段階）
   function requestView(req, today) {
-    var view = { label: '', color: 'none', isNew: false, unhanded: 0, metisLeft: 0, cancelled: false };
+    var view = requestViewBase_(req, today);
+    var items = req.items || [];
+    var billed = false;
+    var ordered = false;
+    for (var i = 0; i < items.length; i++) {
+      if (!needsCleanup_(items[i])) continue;
+      view.cleanup += 1;
+      if (items[i].billed === true) billed = true;
+      if (items[i].ordered === true) ordered = true;
+    }
+    if (view.cleanup > 0) {
+      view.color = 'red';
+      view.next = billed ? 'METISの請求を消す' + (ordered ? '・発注を取り消す' : '') : '発注を取り消す';
+    }
+    return view;
+  }
+  // Logic.gs の parseHandedDate・isoDate_ と同じ（渡した日 'YYYY-MM-DD'。今日の前後1年まで）
+  function parseHandedDate(s, today) {
+    var bad = { ok: false, date: null, error: '渡した日が正しくありません' };
+    if (typeof s !== 'string') return bad;
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return bad;
+    var y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    var date = new Date(y, mo - 1, d);
+    if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return bad;
+    var days = Math.round((Date.UTC(y, mo - 1, d) -
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+    if (Math.abs(days) > 365) return { ok: false, date: null, error: '渡した日は、今日の前後1年の中で選んでください' };
+    return { ok: true, date: date, error: null };
+  }
+  // カレンダーの値を送ってよいか：''＝空にする（clear）、parseHandedDate が通る＝送る（ok）、
+  // それ以外＝打っている途中（Chrome は年を打つたびに 0002・0020・0202… で change を出す）なので送らない（wait）
+  function handedInputState(v, today) {
+    if (v === '' || v === null || v === undefined) return 'clear';
+    return parseHandedDate(String(v), today).ok ? 'ok' : 'wait';
+  }
+  function isoDate_(d) {
+    if (Object.prototype.toString.call(d) !== '[object Date]' || isNaN(d.getTime())) return '';
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function needsCleanup_(it) {
+    return !!it && it.status === 'やめた' && (it.billed === true || it.ordered === true) && it.cleaned !== true;
+  }
+  function requestViewBase_(req, today) {
+    var view = { label: '', color: 'none', next: '', isNew: false,
+      unbilled: 0, unordered: 0, unhanded: 0, metisLeft: 0, cleanup: 0, cancelled: false };
     var status = req.status;
     if (status === '取り消し') {
-      view.label = '取り消し'; view.color = 'gray'; view.cancelled = true;
+      view.label = '取り消し'; view.color = 'gray'; view.next = '取り消し'; view.cancelled = true;
       return view;
     }
     var isNew = isFilled_(req.appliedAt) && !isFilled_(req.seenAt);
     if (status === '申し込まない') {
-      view.label = '申し込まない'; view.color = 'gray'; view.isNew = isNew;
+      view.label = '申し込まない'; view.color = 'gray'; view.next = '申し込まない'; view.isNew = isNew;
       return view;
     }
     if (status === '申し込む') {
@@ -902,28 +1054,35 @@ var AppLogic = (function () {
           stopped += 1;
         } else if (it.status === '買う') {
           buying += 1;
+          if (it.billed !== true) view.unbilled += 1;
+          if (it.ordered !== true) view.unordered += 1;
           if (!isFilled_(it.handed)) view.unhanded += 1;
-          else if (!it.metis) view.metisLeft += 1;
+          if (it.metis !== true) view.metisLeft += 1;
         }
       }
       if (stopped > 0 && buying === 0) {
-        view.label = '取り消し（申込後）'; view.color = 'gray'; view.cancelled = true;
+        view.label = '取り消し（申込後）'; view.color = 'gray'; view.next = '取り消し'; view.cancelled = true;
         return view;
       }
       view.label = '申込済';
       view.isNew = isNew;
-      if (view.metisLeft > 0) view.color = 'red';
-      else if (view.unhanded > 0) view.color = 'orange';
+      if (view.unbilled > 0) { view.color = 'red'; view.next = '① METISで請求作成'; }
+      else if (view.unordered > 0) { view.color = 'purple'; view.next = '② 在庫確認・発注'; }
+      else if (view.unhanded > 0) { view.color = 'blue'; view.next = '③ 届いたら渡す'; }
+      else if (view.metisLeft > 0) { view.color = 'pink'; view.next = '④ METISに引き渡し日'; }
+      else { view.color = 'green'; view.next = '済み'; }
       return view;
     }
     view.label = '未回答';
+    view.next = '返事待ち';
     var sent = req.sent;
     if (isFilled_(sent) && Object.prototype.toString.call(sent) === '[object Date]') {
       var days = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) -
         Date.UTC(sent.getFullYear(), sent.getMonth(), sent.getDate())) / 86400000);
       if (days >= 3) {
         view.label = '未回答（' + days + '日）';
-        view.color = 'yellow';
+        view.color = 'orange';
+        view.next = '催促する';
       }
     }
     return view;
@@ -952,7 +1111,8 @@ var AppLogic = (function () {
     MAX_ITEMS: MAX_ITEMS,
     withdrawDate: withdrawDate, isJapaneseHoliday: isJapaneseHoliday, nextBankDay: nextBankDay, dateLabelJa: dateLabelJa,
     monthChoices: monthChoices, pickPatternFor: pickPatternFor, targetMatches: targetMatches, normalizeQuery: normalizeQuery,
-    newClientKey: newClientKey, yen: yen, addOne: addOne, setPicks: setPicks, formatDate: formatDate, createMockApi: createMockApi
+    newClientKey: newClientKey, yen: yen, addOne: addOne, setPicks: setPicks, formatDate: formatDate, createMockApi: createMockApi,
+    requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState
   };
 })();
 </script>
@@ -1748,12 +1908,18 @@ var AppLogic = (function () {
   function passFilter(r) {
     var v = r.view || {};
     if (r.id === S.openId) return true; // 開いている行は、取り消した直後なども消さない
-    if (v.cancelled && !$('f-cancel').checked) return false;
+    // 取り消しは隠す。ただし後始末（METISの請求を消す）がある取り消しは出す
+    if (v.cancelled && !(v.cleanup > 0) && !$('f-cancel').checked) return false;
     var st = $('f-status').value;
+    var applied = r.status === '申し込む' && !v.cancelled;
     if (st === 'none' && r.status !== '未回答') return false;
     if (st === 'new' && !v.isNew) return false;
-    if (st === 'unhanded' && !(v.unhanded > 0)) return false;
-    if (st === 'metis' && !(v.metisLeft > 0)) return false;
+    if (st === 'todo' && ['red', 'purple', 'blue', 'pink', 'orange'].indexOf(v.color) < 0) return false;
+    if (st === 'billed' && !(applied && v.unbilled > 0)) return false;
+    if (st === 'ordered' && !(applied && v.unordered > 0)) return false;
+    if (st === 'handed' && !(applied && v.unhanded > 0)) return false;
+    if (st === 'metis' && !(applied && v.metisLeft > 0)) return false;
+    if (st === 'remind' && v.color !== 'orange') return false;
     var mo = $('f-month').value;
     if (mo && monthOf(r.withdrawLabel) !== mo) return false;
     var q = L.normalizeQuery($('f-name').value);
@@ -1783,7 +1949,8 @@ var AppLogic = (function () {
     rows.forEach(function (r) {
       var v = r.view || {};
       var open = r.id === S.openId;
-      var tr = h('tr', { class: 'r' + (v.color && v.color !== 'none' ? ' c-' + v.color : '') + (open ? ' open' : ''), tabindex: '0',
+      var color = 'c-' + (v.color || 'none');
+      var tr = h('tr', { class: 'r ' + color + (open ? ' open' : ''), tabindex: '0',
         'aria-expanded': open ? 'true' : 'false',
         onclick: function () { openRow(r.id); },
         onkeydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(r.id); } } }, [
@@ -1792,15 +1959,14 @@ var AppLogic = (function () {
         h('td', { class: 'nw', text: r.grade || '' }),
         h('td', { class: 'nw', text: r.withdrawLabel || '' }),
         h('td', { class: 'nw' }, [v.label || r.status, v.isNew ? h('span', { class: 'new', text: '新しい' }) : null]),
-        h('td', { class: 'nw', text: v.unhanded > 0 ? v.unhanded + '冊' : '' }),
-        h('td', { class: 'nw', text: v.metisLeft > 0 ? v.metisLeft + '冊' : '' }),
-        h('td', { class: 'memo', text: r.memo || '', title: r.memo || '' })
+        h('td', { class: 'memo', text: r.memo || '', title: r.memo || '' }),
+        h('td', { class: 'next-cell' }, [h('span', { class: 'next', text: v.next || v.label || r.status })])
       ]);
       body.appendChild(tr);
       if (open) {
-        var td = h('td', { colspan: '8' });
+        var td = h('td', { colspan: '7' });
         renderDetail(td);
-        body.appendChild(h('tr', { class: 'detail' }, [td]));
+        body.appendChild(h('tr', { class: 'detail ' + color }, [td]));
       }
     });
     var empty = $('list-empty');
@@ -1828,6 +1994,7 @@ var AppLogic = (function () {
     S.detailText = null;
     S.stopAsk = 0;
     S.cancelAsk = false;
+    S.selFor = ''; // 選んだ教材・カレンダーの日は開くたびに空・今日から
     renderList();
     loadDetail(id);
   }
@@ -1873,6 +2040,28 @@ var AppLogic = (function () {
       S.stopAsk = 0;
       patchRow(d);
     });
+  }
+  // 「まとめて」：この申込の「買う」の教材全部に、1つの段階の印を入れる（③は渡した日が空の教材だけ今日）
+  function bulkStage(stage) {
+    detailWrite('bulk', { id: S.openId, stage: stage }, function (d) {
+      S.detail = d;
+      S.stopAsk = 0;
+      patchRow(d);
+    });
+  }
+  // 選んだ教材（左の□）に、上のカレンダーの日を渡した日として入れる
+  function setHandedForSelected(rows) {
+    if (!rows.length || !S.selDate) return;
+    detailWrite('bulk', { id: S.openId, stage: 'handed', date: S.selDate, rows: rows }, function (d) {
+      S.detail = d;
+      S.sel = {};
+      S.stopAsk = 0;
+      patchRow(d);
+    });
+  }
+  function priceOf(it) {
+    if (typeof it.price === 'number' && isFinite(it.price)) return it.price;
+    return Number(String(it.priceLabel || '').replace(/[^\d]/g, '')) || 0;
   }
   function saveMemo() {
     var id = S.openId;
@@ -1942,24 +2131,68 @@ var AppLogic = (function () {
       d.sentLabel ? h('span', { text: '送った日：' + d.sentLabel }) : null,
       h('span', { text: '引き落とし：' + (d.withdrawLabel || '') }),
       d.appliedAtLabel ? h('span', { text: '申し込んだ日時：' + d.appliedAtLabel }) : null,
-      d.parentName ? h('span', { text: '保護者：' + d.parentName }) : null
+      d.parentName ? h('span', { text: '保護者：' + d.parentName }) : null,
+      v.next ? h('span', { class: 'c-' + (v.color || 'none') }, ['次にやること：', h('span', { class: 'next', text: v.next })]) : null
     ]));
 
-    // 教材（渡した日・METIS・やめるは「買う」の教材だけ）
-    var tb = h('tbody');
-    (d.items || []).forEach(function (it) {
-      var buy = it.status === '買う';
-      var handed;
-      if (!buy) handed = [it.handed || '—'];
-      else if (it.handed) handed = [it.handed + ' ', h('button', { type: 'button', class: 'btn-link small', text: '消す', disabled: busy,
-        onclick: function (e) { e.stopPropagation(); itemUpdate(it.row, { handed: '' }); } })];
-      else handed = [h('button', { type: 'button', class: 'btn btn-sm', text: '今日', disabled: busy,
-        onclick: function (e) { e.stopPropagation(); itemUpdate(it.row, { handed: 'today' }); } })];
-      var metis = buy ? [h('label', { class: 'check' }, [
-        h('input', { type: 'checkbox', checked: !!it.metis, disabled: busy,
-          onchange: function (e) { itemUpdate(it.row, { metis: e.target.checked }); } }), '入力済み'])] : [it.metis ? '入力済み' : '—'];
-      var stop = [];
-      if (buy) {
+    // 教材：「買う」（①〜④の印。どれからでも押せる）と、「買わない・やめた」（何もしなくてよい）に分ける
+    var items = d.items || [];
+    var buys = items.filter(function (it) { return it.status === '買う'; });
+    var drops = items.filter(function (it) { return it.status === '買わない' || it.status === 'やめた'; });
+    var waits = items.filter(function (it) { return it.status !== '買う' && it.status !== '買わない' && it.status !== 'やめた'; });
+    var nameCell = function (it) {
+      return h('td', null, [it.name, h('span', { class: 'code', text: it.code }), h('span', { class: 'kind', text: it.kind })]);
+    };
+    // 段階ごとの列：① 赤、② 紫、③ 青、④ ピンク
+    var STEPS = [
+      { key: 'billed', color: 'red', head: '① METIS 請求作成' },
+      { key: 'ordered', color: 'purple', head: '② 在庫確認・発注' },
+      { key: 'handed', color: 'blue', head: '③ 渡した日' },
+      { key: 'metis', color: 'pink', head: '④ METIS 引き渡し日登録' }
+    ];
+    var doneOf = function (it, key) { return key === 'handed' ? !!it.handed : it[key] === true; };
+    if (buys.length) {
+      var sum = 0;
+      buys.forEach(function (it) { sum += priceOf(it); });
+      // 左の□で選んだ教材（申込を開き直すと空）と、上のカレンダーの日（はじめは今日）
+      if (S.selFor !== d.id) { S.selFor = d.id; S.sel = {}; S.selDate = L.isoDate(new Date()); }
+      var selRows = buys.filter(function (it) { return S.sel[it.row]; }).map(function (it) { return it.row; });
+      var allSel = selRows.length === buys.length;
+      var tb = h('tbody');
+      // まとめて（この申込の「買う」全部）。③は上の「選んだ教材の渡した日」で入れる
+      tb.appendChild(h('tr', { class: 'bulk' }, [h('td'), h('td', { colspan: '2', text: 'まとめて（' + buys.length + '冊全部）' })]
+        .concat(STEPS.map(function (s) {
+          if (s.key === 'handed') return h('td', { class: 'st c-' + s.color + ' small muted', text: '上の「入れる」で' });
+          var all = buys.every(function (it) { return doneOf(it, s.key); });
+          return h('td', { class: 'st c-' + s.color }, [h('button', { type: 'button', class: 'btn btn-sm', disabled: busy || all,
+            text: all ? '済み' : 'まとめて ☑',
+            'aria-label': s.head + 'をまとめて',
+            onclick: function () { bulkStage(s.key); } })]);
+        }))
+        .concat([h('td')])));
+      buys.forEach(function (it) {
+        var cells = STEPS.map(function (s) {
+          var done = doneOf(it, s.key);
+          var kids;
+          if (s.key === 'handed') {
+            // カレンダーで選ぶ。変えたらその日を入れる。空にすると渡した日を消す。
+            // 年を打っている途中（0002 など）は送らず、描き直しもしない（入力をそのまま残す）
+            var hint = h('span', { class: 'small date-hint', hidden: true, text: '日付を最後まで入れてください' });
+            kids = [h('input', { type: 'date', value: it.handedDate || '', disabled: busy, 'aria-label': it.name + '：渡した日',
+              onchange: function (e) {
+                var v = e.target.value;
+                var st = L.handedInputState(v, new Date());
+                hint.hidden = st !== 'wait';
+                if (st === 'wait') return;
+                itemUpdate(it.row, { handed: st === 'clear' ? '' : v });
+              } }), hint];
+          } else {
+            kids = [h('input', { type: 'checkbox', checked: done, disabled: busy, 'aria-label': it.name + '：' + s.head,
+              onchange: function (e) { var p = {}; p[s.key] = e.target.checked; itemUpdate(it.row, p); } })];
+          }
+          return h('td', { class: 'st nw c-' + s.color + (done ? '' : ' todo') }, kids);
+        });
+        var stop;
         if (S.stopAsk === it.row) {
           stop = [h('span', { text: 'やめますか？ ' }),
             h('button', { type: 'button', class: 'btn btn-sm btn-danger', text: 'やめる', disabled: busy,
@@ -1970,21 +2203,80 @@ var AppLogic = (function () {
           stop = [h('button', { type: 'button', class: 'btn btn-sm', text: 'やめる', disabled: busy,
             onclick: function () { S.stopAsk = it.row; renderList(); } })];
         }
-      }
-      tb.appendChild(h('tr', { class: it.status === 'やめた' || it.status === '買わない' ? 'stopped' : '' }, [
-        h('td', null, [it.name, h('span', { class: 'code', text: it.code })]),
-        h('td', { class: 'nw', text: it.priceLabel }),
-        h('td', { class: 'nw', text: it.kind }),
-        h('td', { class: 'nw', text: it.status }),
-        h('td', { class: 'nw' }, handed),
-        h('td', { class: 'nw' }, metis),
-        h('td', { class: 'nw' }, stop)
+        var pickBox = h('td', { class: 'sel' }, [h('input', { type: 'checkbox', checked: !!S.sel[it.row], disabled: busy,
+          'aria-label': it.name + 'を選ぶ',
+          onchange: function (e) { if (e.target.checked) S.sel[it.row] = true; else delete S.sel[it.row]; renderList(); } })]);
+        tb.appendChild(h('tr', null, [pickBox, nameCell(it), h('td', { class: 'nw', text: it.priceLabel })]
+          .concat(cells).concat([h('td', { class: 'nw' }, stop)])));
+      });
+      // 上：選んだ教材の渡した日（カレンダー）＋入れる。
+      // カレンダーを変えても描き直さない（年を打っている途中の 0002 などで入力が消えないように）。ボタンと文だけ直す
+      var barNote = function () {
+        var st = L.handedInputState(S.selDate, new Date());
+        return !selRows.length ? '左の□で教材を選んでください' :
+          (st === 'clear' ? '日付を選んでください' : (st === 'wait' ? '日付を最後まで入れてください' : selRows.length + '冊を選んでいます'));
+      };
+      var canPut = function () { return !busy && selRows.length > 0 && L.handedInputState(S.selDate, new Date()) === 'ok'; };
+      var putBtn = h('button', { type: 'button', class: 'btn btn-sm', text: '入れる', disabled: !canPut(),
+        onclick: function () { if (canPut()) setHandedForSelected(selRows); } });
+      var barMsg = h('span', { class: 'small muted', text: barNote() });
+      var dateBar = h('div', { class: 'row date-bar' }, [
+        h('label', { class: 'check' }, ['選んだ教材の渡した日：',
+          h('input', { type: 'date', value: S.selDate || '', disabled: busy, 'aria-label': '選んだ教材の渡した日',
+            onchange: function (e) { S.selDate = e.target.value; putBtn.disabled = !canPut(); barMsg.textContent = barNote(); } })]),
+        putBtn, barMsg
+      ]);
+      var selAll = h('th', { class: 'sel' }, [h('input', { type: 'checkbox', checked: allSel, disabled: busy, 'aria-label': '全部選ぶ',
+        onchange: function (e) {
+          S.sel = {};
+          if (e.target.checked) buys.forEach(function (it) { S.sel[it.row] = true; });
+          renderList();
+        } })]);
+      box.appendChild(h('div', { class: 'd-sec' }, [
+        h('h3', { text: '買う　' + buys.length + '冊　合計 ' + L.yen(sum) }),
+        dateBar,
+        h('div', { class: 'table-wrap', style: 'margin-top:4px' }, [h('table', { class: 'd-items d-steps' }, [
+          h('thead', null, [h('tr', null, [selAll, h('th', { text: '教材' }), h('th', { text: '値段' })]
+            .concat(STEPS.map(function (s) { return h('th', { class: 'st c-' + s.color, text: s.head }); }))
+            .concat([h('th', { text: 'やめる' })]))]),
+          tb
+        ])])
       ]));
-    });
-    box.appendChild(h('div', { class: 'table-wrap' }, [h('table', { class: 'd-items' }, [
-      h('thead', null, [h('tr', null, ['教材', '値段', '区分', '状態', '渡した日', 'METIS', ''].map(function (t) { return h('th', { text: t }); }))]),
-      tb
-    ])]));
+    }
+    // まだ保護者が答えていない（未回答・取り消し）申込の教材
+    if (waits.length) {
+      box.appendChild(h('div', { class: 'd-sec' }, [
+        h('h3', { text: (d.status === '取り消し' ? '取り消した申込の教材　' : '申込書の教材（保護者の返事待ち）　') + waits.length + '冊' }),
+        h('table', { class: 'd-items' }, [h('tbody', null, waits.map(function (it) {
+          return h('tr', null, [nameCell(it), h('td', { class: 'nw', text: it.priceLabel })]);
+        }))])
+      ]));
+    }
+    if (drops.length) {
+      // ①（②）を済ませてから やめた 教材は後始末がいる：METISの請求を消す（発注も取り消す）→「消した」に印
+      var needCount = drops.filter(function (it) { return it.needsCleanup; }).length;
+      box.appendChild(h('div', { class: 'd-drop' }, [
+        h('h3', { text: '買わない・やめた　' + drops.length + '冊' +
+          (needCount ? '（' + needCount + '冊は METISの請求を消す）' : '（何もしなくてよい）') }),
+        h('table', { class: 'd-items' }, [h('tbody', null, drops.map(function (it) {
+          var hasDone = it.status === 'やめた' && (it.billed || it.ordered);
+          var todo = null;
+          if (hasDone) {
+            todo = h('td', { class: 'nw' + (it.needsCleanup ? ' cleanup' : '') }, [
+              it.needsCleanup ? h('span', { class: 'cleanup-text' }, [
+                it.billed ? 'METISの請求を消してください' : null,
+                it.billed && it.ordered ? h('br') : null,
+                it.ordered ? '発注も取り消してください' : null]) : null,
+              h('label', { class: 'check', style: 'margin-left:10px' }, [
+                h('input', { type: 'checkbox', checked: !!it.cleaned, disabled: busy, 'aria-label': it.name + '：請求を消した',
+                  onchange: function (e) { itemUpdate(it.row, { cleaned: e.target.checked }); } }), '消した'])
+            ]);
+          }
+          return h('tr', { class: it.needsCleanup ? 'need-cleanup' : '' },
+            [nameCell(it), h('td', { class: 'nw', text: it.priceLabel }), h('td', { class: 'nw', text: it.status }), todo || h('td')]);
+        }))])
+      ]));
+    }
 
     // 下：メモ と 押すもの
     var id = d.id;
@@ -2002,7 +2294,7 @@ var AppLogic = (function () {
     var canCancel = d.status === '未回答' || (d.status === '申し込む' && !v.cancelled);
     if (d.status === '未回答') {
       acts.appendChild(h('button', { type: 'button', class: 'btn', text: '送る文をもう一度コピー', disabled: busy, onclick: function () { fetchText('send'); } }));
-      if (v.color === 'yellow') {
+      if (v.color === 'orange') {
         acts.appendChild(h('button', { type: 'button', class: 'btn', text: '催促の文をコピー', disabled: busy, onclick: function () { fetchText('remind'); } }));
       }
     }
