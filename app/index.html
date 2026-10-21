@@ -7,7 +7,7 @@
 // API_URL：Apps Script の Webアプリの URL（「デプロイを管理」のウェブアプリの URL、…/exec）。保護者の画面 site/index.html の API_URL と同じもの
 // CLIENT_ID：Google Cloud で作った OAuth クライアント（ウェブ アプリケーション）の ID（…apps.googleusercontent.com）。Config.gs の GOOGLE_CLIENT_ID と同じもの
 // どちらかが空のうちは「設定がまだです」と出る。お試しは URL の後ろに ?mock=1 を付けて開く（架空のデータ・ログインなし）
-var API_URL = 'https://script.google.com/macros/s/AKfycbwm5BHF2vVwwJx2zshsAtagyDktfNFeX1gPjsEhGYI916EHDTNUkjaY4DZAl-KiJZut/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ugfm8M1lO7Xel7R20J7S7Pyb4GjHFhwgIKBXtuJd7qjU/exec';
 var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleusercontent.com';
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -289,6 +289,13 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
             <select id="set" aria-label="セット"></select>
             <span id="set-msg" class="small muted"></span>
           </div>
+          <div id="set-confirm" class="confirm" hidden>
+            <p>今の教材を消して、セットの教材に入れ替えますか？</p>
+            <div class="row">
+              <button type="button" id="set-yes" class="btn btn-danger">入れ替える</button>
+              <button type="button" id="set-no" class="btn">やめる</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -396,7 +403,7 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
         <span class="c-pink"><i class="sw"></i>④ METISに引き渡し日</span>
         <span class="c-green"><i class="sw"></i>済み</span>
         <span class="c-orange"><i class="sw"></i>催促する（送って3日・未回答）</span>
-        <span class="c-none"><i class="sw"></i>返事待ち</span>
+        <span class="c-none"><i class="sw"></i>返事待ち（未回答）</span>
         <span class="c-gray"><i class="sw"></i>申し込まない・取り消し</span>
         <span><b class="new" style="margin:0">新しい</b>保護者が答えて、まだ開いていない</span>
       </p>
@@ -1287,14 +1294,28 @@ var AppLogic = (function () {
     if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return bad;
     var days = Math.round((Date.UTC(y, mo - 1, d) -
       Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
-    if (Math.abs(days) > 365) return { ok: false, date: null, error: '渡した日は、今日の前後1年の中で選んでください' };
+    if (Math.abs(days) > 365) return { ok: false, date: null, error: '1年以内の日付を入れてください' };
     return { ok: true, date: date, error: null };
   }
   // カレンダーの値を送ってよいか：''＝空にする（clear）、parseHandedDate が通る＝送る（ok）、
   // それ以外＝打っている途中（Chrome は年を打つたびに 0002・0020・0202… で change を出す）なので送らない（wait）
+  // 'far'＝最後まで入っているが今日の前後1年の外（「1年以内の日付を入れてください」）。年が1900より前は打っている途中とみなす
   function handedInputState(v, today) {
     if (v === '' || v === null || v === undefined) return 'clear';
-    return parseHandedDate(String(v), today).ok ? 'ok' : 'wait';
+    var s = String(v);
+    if (parseHandedDate(s, today).ok) return 'ok';
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m && Number(m[1]) >= 1900) {
+      var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      if (d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3])) return 'far';
+    }
+    return 'wait';
+  }
+  // カレンダーの下に出す文（送らないとき）
+  function handedInputHint(state) {
+    if (state === 'far') return '1年以内の日付を入れてください';
+    if (state === 'wait') return '日付を最後まで入れてください';
+    return '';
   }
   function isoDate_(d) {
     if (Object.prototype.toString.call(d) !== '[object Date]' || isNaN(d.getTime())) return '';
@@ -1385,7 +1406,7 @@ var AppLogic = (function () {
     withdrawDate: withdrawDate, isJapaneseHoliday: isJapaneseHoliday, nextBankDay: nextBankDay, dateLabelJa: dateLabelJa,
     monthChoices: monthChoices, pickPatternFor: pickPatternFor, targetMatches: targetMatches, normalizeQuery: normalizeQuery,
     newClientKey: newClientKey, yen: yen, addOne: addOne, setPicks: setPicks, formatDate: formatDate, createMockApi: createMockApi,
-    requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState,
+    requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState, handedInputHint: handedInputHint,
     applyChanges: applyChanges, mergePend: mergePend, createSaveQueue: createSaveQueue,
     shouldDeferRedraw: shouldDeferRedraw, saveFailText: saveFailText, noteSaveResult: noteSaveResult, isStaleResponse: isStaleResponse
   };
@@ -1778,12 +1799,22 @@ var AppLogic = (function () {
     $('view-make').hidden = v !== 'make';
     $('view-list').hidden = v !== 'list';
     renderHeader();
-    if (v === 'list') renderList();
+    if (v === 'list') {
+      renderList();
+      if (S.loaded) refreshList(true); // 「一覧」を押したら読み直す（ためた保存を送ってから）
+    }
+  }
+  // 一覧の自動の読み直し：3分ごと（ページが見えていて、中身で文字・日付を打っていないとき）と、ページがまた見えたとき
+  var AUTO_LIST_MS = 3 * 60 * 1000;
+  function autoRefreshList() {
+    if (!S.loaded || S.refreshing || document.visibilityState !== 'visible' || typingInDetail()) return;
+    refreshList(true);
   }
 
   // ================= 作る =================
 
   function resetForm(keepMonth) {
+    closeSetAsk();
     S.studentText = '';
     S.student = '';
     S.grade = '';
@@ -1918,11 +1949,26 @@ var AppLogic = (function () {
     S.sets.forEach(function (s) { sel.appendChild(h('option', { value: s.name, text: s.name + '（' + s.codes.length + '冊）' })); });
     sel.value = S.setName;
   }
-  // セットを選んだ：教材をそのセットの中身にする（「使わない」は今の教材をそのまま）
+  // セットを選んだ：教材をそのセットの中身にする（「使わない」は今の教材をそのまま）。
+  // もう教材が入っているときは、入れ替える前に画面の中で確かめる（「入れ替える」「やめる」）
   function onSetChange() {
     if (S.creating) { $('set').value = S.setName; return; }
     var name = $('set').value;
+    if (name !== NO_SET && S.items.length > 0) {
+      S.setAsk = name;
+      $('set-confirm').hidden = false;
+      return;
+    }
+    applySet(name);
+  }
+  function closeSetAsk() {
+    S.setAsk = null;
+    $('set-confirm').hidden = true;
+  }
+  function applySet(name) {
+    closeSetAsk();
     S.setName = name;
+    $('set').value = name;
     if (name === NO_SET) {
       say($('set-msg'), '');
       return;
@@ -2277,7 +2323,7 @@ var AppLogic = (function () {
     }
     S.redrawPending = false;
     renderMonthFilter();
-    $('list-time').textContent = S.listTime ? S.listTime + ' に読み込みました' : '';
+    $('list-time').textContent = S.listTime ? S.listTime + ' に読み込みました（3分ごとに自動で読み直します。すぐ見るときは「更新」）' : '';
     var body = $('list-body');
     clear(body);
     var rows = S.list.filter(passFilter);
@@ -2612,13 +2658,15 @@ var AppLogic = (function () {
           if (s.key === 'handed') {
             // カレンダーで選ぶ。変えたらその日を入れる。空にすると渡した日を消す。
             // 年を打っている途中（0002 など）は送らず、描き直しもしない（入力をそのまま残す）
-            var hint = h('span', { class: 'small date-hint', hidden: true, text: '日付を最後まで入れてください' });
+            // 1年より離れた日は「1年以内の日付を入れてください」と出して送らない
+            var hint = h('span', { class: 'small date-hint', hidden: true, text: '' });
             kids = [h('input', { type: 'date', value: it.handedDate || '', disabled: busy, 'aria-label': it.name + '：渡した日',
               onchange: function (e) {
                 var v = e.target.value;
                 var st = L.handedInputState(v, new Date());
-                hint.hidden = st !== 'wait';
-                if (st === 'wait') return;
+                hint.textContent = L.handedInputHint(st);
+                hint.hidden = !hint.textContent;
+                if (st === 'wait' || st === 'far') return;
                 queueItem(it.row, { handed: st === 'clear' ? '' : v });
               } }), hint];
           } else {
@@ -2649,7 +2697,7 @@ var AppLogic = (function () {
       var barNote = function () {
         var st = L.handedInputState(S.selDate, new Date());
         return !selRows.length ? '左の□で教材を選んでください' :
-          (st === 'clear' ? '日付を選んでください' : (st === 'wait' ? '日付を最後まで入れてください' : selRows.length + '冊を選んでいます'));
+          (st === 'clear' ? '日付を選んでください' : (L.handedInputHint(st) || selRows.length + '冊を選んでいます'));
       };
       var canPut = function () { return !busy && selRows.length > 0 && L.handedInputState(S.selDate, new Date()) === 'ok'; };
       var putBtn = h('button', { type: 'button', class: 'btn btn-sm', text: '入れる', disabled: !canPut(),
@@ -2689,10 +2737,14 @@ var AppLogic = (function () {
     }
     if (drops.length) {
       // ①（②）を済ませてから やめた 教材は後始末がいる：METISの請求を消す（発注も取り消す）→「消した」に印
-      var needCount = drops.filter(function (it) { return it.needsCleanup; }).length;
+      var needs = drops.filter(function (it) { return it.needsCleanup; });
+      var needCount = needs.length;
+      // 見出しの「やること」：①が済んでいた教材があれば請求を消す、②が済んでいた教材があれば発注を取り消す
+      var needWhat = [needs.some(function (it) { return it.billed; }) ? 'METISの請求を消す' : null,
+        needs.some(function (it) { return it.ordered; }) ? '発注を取り消す' : null].filter(Boolean).join('・');
       box.appendChild(h('div', { class: 'd-drop' }, [
         h('h3', { text: '買わない・やめた　' + drops.length + '冊' +
-          (needCount ? '（' + needCount + '冊は METISの請求を消す）' : '（何もしなくてよい）') }),
+          (needCount ? '（' + needCount + '冊は ' + needWhat + '）' : '（何もしなくてよい）') }),
         h('table', { class: 'd-items' }, [h('tbody', null, drops.map(function (it) {
           var hasDone = it.status === 'やめた' && (it.billed || it.ordered);
           var todo = null;
@@ -2701,7 +2753,7 @@ var AppLogic = (function () {
               it.needsCleanup ? h('span', { class: 'cleanup-text' }, [
                 it.billed ? 'METISの請求を消してください' : null,
                 it.billed && it.ordered ? h('br') : null,
-                it.ordered ? '発注も取り消してください' : null]) : null,
+                it.ordered ? (it.billed ? '発注も取り消してください' : '発注を取り消してください') : null]) : null,
               h('label', { class: 'check', style: 'margin-left:10px' }, [
                 h('input', { type: 'checkbox', checked: !!it.cleaned, disabled: busy, 'aria-label': it.name + '：請求を消した',
                   onchange: function (e) { queueItem(it.row, { cleaned: e.target.checked }); } }), '消した'])
@@ -2788,6 +2840,8 @@ var AppLogic = (function () {
   $('history-toggle').addEventListener('click', function () { S.historyOpen = !S.historyOpen; renderStep1(); });
   $('month').addEventListener('change', function (e) { S.month = e.target.value; formChanged(); renderMake(); });
   $('set').addEventListener('change', onSetChange);
+  $('set-yes').addEventListener('click', function () { if (S.setAsk !== null && S.setAsk !== undefined) applySet(S.setAsk); });
+  $('set-no').addEventListener('click', function () { closeSetAsk(); $('set').value = S.setName; }); // 前のセットにもどす
   $('search').addEventListener('input', function (e) { S.query = e.target.value; renderPickers(); });
   $('filter-grade').addEventListener('click', function () { S.searchMode = 'grade'; renderPickers(); });
   $('filter-all').addEventListener('click', function () { S.searchMode = 'all'; renderPickers(); });
@@ -2815,7 +2869,11 @@ var AppLogic = (function () {
   });
   // 本当に閉じるときは、送っている分の答えを待たずに、ためた分も送ってみる
   window.addEventListener('pagehide', function () { Q.flushNow(); Q.emergencyFlush(); });
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') Q.flushNow(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') Q.flushNow();
+    else autoRefreshList(); // また見えたら一覧を読み直す
+  });
+  setInterval(autoRefreshList, AUTO_LIST_MS);
   // 中身の描き直しを後回しにしていたら：日本語の変換が終わった・どこかを押した・Tab で移ったあとに描き直す
   document.addEventListener('compositionstart', function () { S.composing = true; });
   document.addEventListener('compositionend', function () { S.composing = false; setTimeout(flushDeferred, 0); });
