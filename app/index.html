@@ -45,6 +45,14 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
   .tab.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
   .spacer { flex: 1; }
   .who { font-size: 13px; color: #5f6368; }
+  .save-state { font-size: 14px; font-weight: bold; padding: 2px 12px; border-radius: 999px; white-space: nowrap; }
+  .save-state.saving { color: #3c4043; background: #f1f3f4; }
+  .save-state.saved { color: #27500A; background: #EAF3DE; }
+  .save-state.error, .save-state.relogin { color: #791F1F; background: #FCEBEB; }
+  .save-fail { border: 2px solid #E24B4A; background: #FCEBEB; color: #791F1F; padding: 12px 18px; }
+  .save-fail p { margin: 4px 0; font-weight: bold; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .list tbody tr.r.save-failed td { border-style: dashed; }
+  .fail-tag { display: inline-block; margin-left: 6px; padding: 0 8px; font-size: 13px; font-weight: bold; color: #fff; background: #A32D2D; border-radius: 999px; }
 
   /* ボタン */
   .btn { display: inline-block; padding: 10px 18px; border: 1px solid #c9ced6; border-radius: 8px; background: #fff;
@@ -204,6 +212,7 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
     </nav>
     <button type="button" id="refresh" class="btn btn-sm" hidden>更新</button>
     <span class="spacer"></span>
+    <span id="save-state" class="save-state" role="status" aria-live="polite" hidden></span>
     <span id="who" class="who"></span>
   </div>
 </header>
@@ -214,6 +223,9 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
     <p>ログインの期限が切れました。もう一度ログインしてください（入力したものは消えていません）。</p>
     <div id="relogin-btn"></div>
   </section>
+
+  <!-- 裏の保存ができなかった申込（閉じるか、次に保存できるまで出しておく） -->
+  <section id="save-fail" class="card save-fail" role="alert" hidden></section>
 
   <section id="pane-loading" class="card"><p>読み込んでいます…</p></section>
 
@@ -556,6 +568,224 @@ var AppLogic = (function () {
     });
   }
 
+  // ================= 中身の印をすぐ画面に出し、ためて1回で保存する =================
+
+  // ためた変更 pend（{changes: {行: {billed?, ordered?, metis?, cleaned?, handed?}}, memo?}）を、
+  // 申込の中身 detail（open の形）にかぶせた写しを返す（もとの detail は変えない）。色・次にやることも計算し直す
+  function applyChanges(detail, pend, today) {
+    var d = JSON.parse(JSON.stringify(detail));
+    if (!pend) return d;
+    var ch = pend.changes || {};
+    (d.items || []).forEach(function (it) {
+      var p = ch[it.row];
+      if (!p) return;
+      ['billed', 'ordered', 'metis', 'cleaned'].forEach(function (k) { if (typeof p[k] === 'boolean') it[k] = p[k]; });
+      if (p.handed !== undefined) {
+        var iso = p.handed === 'today' ? isoDate_(today) : p.handed;
+        if (iso === '') { it.handed = ''; it.handedDate = ''; }
+        else {
+          var pd = parseHandedDate(iso, today);
+          if (pd.ok) { it.handedDate = iso; it.handed = (pd.date.getMonth() + 1) + '月' + pd.date.getDate() + '日'; }
+        }
+      }
+      it.needsCleanup = needsCleanup_(it);
+    });
+    if (typeof pend.memo === 'string') d.memo = pend.memo;
+    if (d.status === '申し込む') {
+      var old = d.view || {};
+      var v = requestView({ status: d.status, items: d.items }, today);
+      v.isNew = !!old.isNew;
+      d.view = v;
+    }
+    return d;
+  }
+  // pend を2つ重ねる（b が新しい。同じ行・同じ印は b が勝つ）
+  function mergePend(a, b) {
+    var out = { changes: {} };
+    [a, b].forEach(function (p) {
+      if (!p) return;
+      var ch = p.changes || {};
+      for (var r in ch) {
+        if (!Object.prototype.hasOwnProperty.call(ch, r)) continue;
+        out.changes[r] = out.changes[r] || {};
+        for (var k in ch[r]) if (Object.prototype.hasOwnProperty.call(ch[r], k)) out.changes[r][k] = ch[r][k];
+      }
+      if (typeof p.memo === 'string') out.memo = p.memo;
+      if (p.cls) out.cls = p.cls;
+    });
+    return out;
+  }
+  function pendEmpty(p) {
+    return !p || (Object.keys(p.changes || {}).length === 0 && typeof p.memo !== 'string');
+  }
+
+  // 保存のならび。opts = {send(id, cls, payload) → Promise<{ok,data}|{ok:false,error,relogin?}>, delay（ms・既定800）,
+  //   timer: {set(fn, ms), clear(h)}, onState(state), onSaved(id, data), onFailed(id, pend, res)}
+  // state：'idle'・'saving'（ためている・送っている）・'saved'（送り終わった）・'error'（どれかが保存できなかった）・'relogin'（ログインし直すまで待つ）
+  // 1回に送るのは申込1件分（{changes:[{row, ...}], memo?}）。失敗した分は捨てて onFailed（画面はサーバーの状態に戻す）。
+  // ログイン切れは、送った分をならびに戻して止まる（resume で続き）
+  function createSaveQueue(opts) {
+    var timer = opts.timer || { set: function (fn, ms) { return setTimeout(fn, ms); }, clear: function (hd) { clearTimeout(hd); } };
+    var delay = opts.delay === undefined ? 800 : opts.delay;
+    var pending = {};   // id → pend（cls つき）
+    var order = [];     // ためた順の id
+    var inflight = null;
+    var handle = null;
+    var paused = false;
+    var forced = false;
+    var failed = false;
+    var state = 'idle';
+    var waiters = [];
+    function setState(s) { state = s; if (opts.onState) opts.onState(s); }
+    function hasPending() { return order.length > 0; }
+    function put(id, cls, p) {
+      if (!pending[id]) { pending[id] = { cls: cls, changes: {} }; order.push(id); }
+      pending[id] = mergePend(pending[id], p);
+      pending[id].cls = cls;
+    }
+    function schedule() {
+      if (handle !== null) timer.clear(handle);
+      handle = timer.set(function () { handle = null; kick(); }, delay);
+    }
+    function settle() {
+      setState(paused ? 'relogin' : (failed ? 'error' : 'saved'));
+      failed = false;
+      forced = false;
+      var w = waiters;
+      waiters = [];
+      w.forEach(function (fn) { fn(); });
+    }
+    function kick() {
+      if (inflight) return;
+      if (paused || !hasPending()) { if (state === 'saving' || waiters.length) settle(); return; }
+      var id = order.shift();
+      var p = pending[id];
+      delete pending[id];
+      if (pendEmpty(p)) { kick(); return; }
+      var payload = { id: id, changes: [] };
+      Object.keys(p.changes).forEach(function (r) {
+        var c = { row: Number(r) };
+        for (var k in p.changes[r]) if (Object.prototype.hasOwnProperty.call(p.changes[r], k)) c[k] = p.changes[r][k];
+        payload.changes.push(c);
+      });
+      if (typeof p.memo === 'string') payload.memo = p.memo;
+      inflight = { id: id, cls: p.cls, pend: p };
+      setState('saving');
+      Promise.resolve(opts.send(id, p.cls, payload)).then(function (res) {
+        res = res && typeof res === 'object' ? res : { ok: false };
+        inflight = null;
+        if (res.ok) {
+          if (opts.onSaved) opts.onSaved(id, res.data);
+        } else if (res.relogin) {
+          // 送った分を戻す（あとからためた分が勝つ）
+          var later = pending[id];
+          if (!later) order.unshift(id);
+          pending[id] = mergePend(p, later);
+          pending[id].cls = p.cls;
+          paused = true;
+        } else {
+          failed = true;
+          if (opts.onFailed) opts.onFailed(id, p, res);
+        }
+        if (!paused && hasPending() && (forced || handle === null)) { if (handle !== null) { timer.clear(handle); handle = null; } kick(); }
+        else if (!hasPending() || paused) settle();
+      });
+    }
+    return {
+      // 1冊の印を変えた（patch は {billed:true} など）
+      add: function (id, cls, row, patch) {
+        var ch = {};
+        ch[row] = patch;
+        put(id, cls, { changes: ch });
+        setState('saving');
+        schedule();
+      },
+      addMemo: function (id, cls, text) {
+        put(id, cls, { changes: {}, memo: text });
+        setState('saving');
+        schedule();
+      },
+      // すぐ送る（閉じる・教室やタブを変える・ページを離れる前）。送り終わる（か止まる）と解ける
+      flushNow: function () {
+        if (handle !== null) { timer.clear(handle); handle = null; }
+        if (!inflight && !hasPending()) return Promise.resolve();
+        forced = true;
+        var pr = new Promise(function (resolve) { waiters.push(resolve); });
+        kick();
+        return pr;
+      },
+      // ログインし直した：止まっていた分を送る
+      resume: function () {
+        paused = false;
+        if (hasPending()) { forced = true; kick(); }
+      },
+      // この申込の、まだサーバーに届いていない変更（送っている分＋ためている分）
+      pendingFor: function (id) {
+        var a = inflight && inflight.id === id ? inflight.pend : null;
+        var b = pending[id] || null;
+        if (!a && !b) return null;
+        return mergePend(a, b);
+      },
+      // 送っている・ためている・止まっている分がある（ページを離れる前の確認に使う）
+      hasWork: function () { return !!inflight || hasPending(); },
+      // この申込の分を送っている・ためている
+      busyFor: function (id) { return (!!inflight && inflight.id === id) || !!pending[id]; },
+      // ページを閉じるとき：送っている分の答えを待たずに、ためた分も全部すぐ送る（答えは受けない。止まっている間は送れない）
+      emergencyFlush: function () {
+        if (handle !== null) { timer.clear(handle); handle = null; }
+        if (paused) return 0;
+        var count = 0;
+        while (hasPending()) {
+          var id = order.shift();
+          var p = pending[id];
+          delete pending[id];
+          if (pendEmpty(p)) continue;
+          var payload = { id: id, changes: [] };
+          Object.keys(p.changes).forEach(function (r) {
+            var c = { row: Number(r) };
+            for (var k in p.changes[r]) if (Object.prototype.hasOwnProperty.call(p.changes[r], k)) c[k] = p.changes[r][k];
+            payload.changes.push(c);
+          });
+          if (typeof p.memo === 'string') payload.memo = p.memo;
+          try { opts.send(id, p.cls, payload); } catch (e) { /* 閉じるところなので何もしない */ }
+          count += 1;
+        }
+        return count;
+      },
+      state: function () { return state; }
+    };
+  }
+
+  // 中身を描き直してよいか：中身の中で文字・日付を打っている（日本語の変換中もふくむ）ときは後回しにする。
+  // el = {tag, type, inDetail}（document.activeElement から作る）、composing = 変換中か
+  function shouldDeferRedraw(el, composing) {
+    if (composing) return true;
+    if (!el || !el.inDetail) return false;
+    var tag = String(el.tag || '').toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    if (tag !== 'INPUT') return false;
+    var type = String(el.type || 'text').toLowerCase();
+    return type !== 'checkbox' && type !== 'button' && type !== 'submit';
+  }
+
+  // 保存できなかった申込の覚え（申込番号 → {text}）。失敗で足す、その申込の次の保存ができたら・閉じるを押したら消す。もとの map は変えない
+  function saveFailText(row) {
+    var who = row && row.student ? row.student : 'この申込';
+    var when = row && row.sentLabel ? '（' + row.sentLabel + '）' : '';
+    return who + when + 'の保存ができませんでした。もう一度押してください';
+  }
+  function noteSaveResult(failed, id, ok, row) {
+    var out = {};
+    for (var k in failed) if (Object.prototype.hasOwnProperty.call(failed, k)) out[k] = failed[k];
+    if (ok) delete out[id];
+    else out[id] = { text: saveFailText(row) };
+    return out;
+  }
+  // 古い答えか：要求を出したとき（start）より、その申込の保存の答えがあとに来ていれば古い（捨てる）
+  function isStaleResponse(start, savedAt) {
+    return (savedAt || 0) > start;
+  }
+
   // ================= お試し（?mock=1）：偽の API。返す形は Staff.gs と同じ =================
   function createMockApi(now) {
     var base = now ? new Date(now.getTime()) : new Date();
@@ -569,7 +799,7 @@ var AppLogic = (function () {
 
     var MSG_NO_CLASS = 'この教室は開けません';
     var MSG_NOT_FOUND = 'この申込は見つかりません';
-    var WRITE_OPS = ['create', 'updateItem', 'bulk', 'memo', 'cancel'];
+    var WRITE_OPS = ['create', 'updateItem', 'bulk', 'batch', 'memo', 'cancel'];
     var STAGES = ['billed', 'ordered', 'handed', 'metis'];
     var MASTER = [
       { code: 'M001', name: '中1 数学 基礎ワーク', price: 1650, target: '中学生' },
@@ -853,6 +1083,49 @@ var AppLogic = (function () {
         if (a.stop === true) item.status = 'やめた';
         return { ok: true, data: openView(x, req) };
       },
+      // Staff.gs の staffBatch_ と同じ：全部確かめてから書く（1つでもだめなら何も書かない）
+      batch: function (x) {
+        var a = x.args;
+        var changes = a.changes === undefined ? [] : a.changes;
+        if (!Array.isArray(changes) || changes.length > 100) return { ok: false, error: 'badrequest' };
+        var hasMemo = a.memo !== undefined;
+        if (hasMemo && typeof a.memo !== 'string') return { ok: false, error: 'badrequest' };
+        if (hasMemo && a.memo.length > 200) return { ok: false, error: 'メモは200文字までです' };
+        var req = findForCls(x, a.id);
+        if (!req) return { ok: false, error: MSG_NOT_FOUND };
+        var itemOf = {};
+        itemsOf(x.c, req.id).forEach(function (it) { itemOf[it.row] = it; });
+        var plan = [];
+        for (var j = 0; j < changes.length; j++) {
+          var ch = changes[j];
+          var row = ch && typeof ch === 'object' ? ch.row : null;
+          if (typeof row !== 'number' || Math.floor(row) !== row) return { ok: false, error: 'badrequest' };
+          var item = itemOf[row];
+          if (!item) return { ok: false, error: 'この教材は見つかりません' };
+          var set = {};
+          var keys = ['billed', 'ordered', 'metis', 'cleaned'];
+          for (var k = 0; k < keys.length; k++) {
+            if (ch[keys[k]] === undefined) continue;
+            if (typeof ch[keys[k]] !== 'boolean') return { ok: false, error: 'badrequest' };
+            set[keys[k]] = ch[keys[k]];
+          }
+          if (typeof ch.cleaned === 'boolean' && item.status !== 'やめた') return { ok: false, error: 'やめた教材だけ「消した」にできます' };
+          if (ch.handed !== undefined) {
+            if (ch.handed === 'today') set.handed = new Date(T.getTime());
+            else if (ch.handed === '') set.handed = '';
+            else {
+              if (typeof ch.handed !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ch.handed)) return { ok: false, error: 'badrequest' };
+              var hd = parseHandedDate(ch.handed, T);
+              if (!hd.ok) return { ok: false, error: hd.error };
+              set.handed = hd.date;
+            }
+          }
+          plan.push({ item: item, set: set });
+        }
+        plan.forEach(function (p) { for (var key in p.set) p.item[key] = p.set[key]; });
+        if (hasMemo) req.memo = a.memo;
+        return { ok: true, data: openView(x, req) };
+      },
       bulk: function (x) {
         var a = x.args;
         var stage = typeof a.stage === 'string' ? a.stage : '';
@@ -1112,7 +1385,9 @@ var AppLogic = (function () {
     withdrawDate: withdrawDate, isJapaneseHoliday: isJapaneseHoliday, nextBankDay: nextBankDay, dateLabelJa: dateLabelJa,
     monthChoices: monthChoices, pickPatternFor: pickPatternFor, targetMatches: targetMatches, normalizeQuery: normalizeQuery,
     newClientKey: newClientKey, yen: yen, addOne: addOne, setPicks: setPicks, formatDate: formatDate, createMockApi: createMockApi,
-    requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState
+    requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState,
+    applyChanges: applyChanges, mergePend: mergePend, createSaveQueue: createSaveQueue,
+    shouldDeferRedraw: shouldDeferRedraw, saveFailText: saveFailText, noteSaveResult: noteSaveResult, isStaleResponse: isStaleResponse
   };
 })();
 </script>
@@ -1145,6 +1420,37 @@ var AppLogic = (function () {
     stopAsk: 0, cancelAsk: false, memoDraft: {}, openSeq: 0
   };
   var mock = MOCK ? L.createMockApi(new Date()) : null;
+  // 中身の印（①②④・渡した日・消した・メモ・まとめて）：画面はすぐ変え、ためて約0.8秒後に1回で保存する
+  S.base = {};     // 申込番号 → サーバーから来た最後の中身（open の形）
+  S.failed = {};   // 申込番号 → {text}：保存できなかった申込（閉じるか、次に保存できるまで出しておく）
+  S.saveClock = 0; // 保存の答えが来るたびに1ずつ増える時計
+  S.savedAt = {};  // 申込番号 → その申込の最後の保存の答えが来た時計（これより前に出した open・list の答えは古い）
+  S.composing = false;
+  S.redrawPending = false;
+  var Q = L.createSaveQueue({
+    send: function (id, cls, payload) { return send('batch', payload, L.newClientKey(), cls); },
+    onState: renderSaveState,
+    onSaved: function (id, data) {
+      S.savedAt[id] = ++S.saveClock;
+      S.base[id] = data;
+      S.failed = L.noteSaveResult(S.failed, id, true);
+      renderSaveFail();
+      redisplay(id);
+    },
+    onFailed: function (id, pend, res) {
+      // 失敗した分だけサーバーの状態に戻す（あとからためた分は残る）。メモは、打ち直していなければ入力欄に戻して押し直せるように
+      S.savedAt[id] = ++S.saveClock;
+      if (typeof pend.memo === 'string' && S.memoDraft[id] === undefined) S.memoDraft[id] = pend.memo;
+      if (S.openId === id) {
+        var why = res && typeof res.error === 'string' && /[ぁ-んァ-ヶ一-龠]/.test(res.error) && !res.network ? '（' + res.error + '）' : '';
+        S.detailMsg = { kind: 'error', text: '保存できませんでした。もう一度押してください' + why };
+      }
+      // 閉じたあとの失敗でも、どの申込かわかるように上に出しておく（閉じるか、次に保存できるまで）
+      S.failed = L.noteSaveResult(S.failed, id, false, findRow(id) || S.base[id]);
+      renderSaveFail();
+      redisplay(id);
+    }
+  });
 
   // ---- 小さな部品 ----
   function $(id) { return document.getElementById(id); }
@@ -1184,23 +1490,27 @@ var AppLogic = (function () {
   }
 
   // ---- 通信：本文 {api:'staff', idToken, op, cls, args, clientKey}（text/plain。ヘッダーにトークンは付けない）----
-  function send(op, args, clientKey) {
-    var body = { api: 'staff', idToken: S.token, op: op, cls: S.cls, args: args || {} };
+  // cls を渡すとその教室に送る（ためた保存は、ためたときの教室に送る）
+  function send(op, args, clientKey, cls) {
+    var body = { api: 'staff', idToken: S.token, op: op, cls: cls || S.cls, args: args || {} };
     if (clientKey) body.clientKey = clientKey;
-    var p = MOCK ? mockSend(body) : realSend(body, clientKey ? 60000 : 30000);
+    var p = MOCK ? mockSend(body) : realSend(body, clientKey ? 60000 : 30000, op === 'batch');
     return p.then(function (res) {
       if (!res || typeof res !== 'object') res = { ok: false, error: MSG_FAIL };
       if (res.relogin) needRelogin();
       return res;
     });
   }
-  function realSend(body, timeoutMs) {
+  // keepalive：ページを閉じるときに送ったためた保存も、届くようにする（本文が小さいときだけ）
+  function realSend(body, timeoutMs, keepalive) {
     var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
     var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+    var text = JSON.stringify(body);
     var opts = {
       method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // preflight を起こさない
-      body: JSON.stringify(body), credentials: 'omit', redirect: 'follow'
+      body: text, credentials: 'omit', redirect: 'follow'
     };
+    if (keepalive && text.length < 30000) opts.keepalive = true;
     if (ctrl) opts.signal = ctrl.signal;
     return fetch(API_URL, opts).then(function (r) {
       if (timer) clearTimeout(timer);
@@ -1292,6 +1602,7 @@ var AppLogic = (function () {
     renderWho();
     if (S.loaded) {
       $('banner').hidden = true;
+      Q.resume(); // ログイン切れで止まっていた保存を送る
       refreshList(true);
       if (S.view === 'make') say($('create-msg'), 'ログインしました。続けて操作できます（「作る」はもう一度押してください）', 'ok');
       return;
@@ -1321,13 +1632,14 @@ var AppLogic = (function () {
     var my = ++S.loadSeq;
     S.cls = cls;
     var pInit = send('init', {});
-    var pList = send('list', {});
+    var listStart = 0;
+    var pList = Q.flushNow().then(function () { listStart = S.saveClock; return send('list', {}); }); // ためた保存を送ってから読む
     pInit.then(function (res) {
       if (my !== S.loadSeq) return;
       if (res.ok && res.data) {
         applyInit(res.data);
         showPane('app');
-        pList.then(function (lr) { if (my === S.loadSeq) applyList(lr); });
+        pList.then(function (lr) { if (my === S.loadSeq) applyList(lr, listStart); });
         return;
       }
       if (res.relogin) return; // needRelogin が出している
@@ -1377,7 +1689,8 @@ var AppLogic = (function () {
     $('refresh').disabled = true;
     say($('list-msg'), '読み込んでいます…', 'info');
     var pInit = send('init', {});
-    var pList = send('list', {});
+    var listStart = 0;
+    var pList = Q.flushNow().then(function () { listStart = S.saveClock; return send('list', {}); }); // ためた保存を送ってから読む
     pInit.then(function (res) {
       if (my !== S.loadSeq || S.cls !== c) { done(); return; }
       if (res.ok && res.data && res.data.cls && res.data.cls.code === c) {
@@ -1396,15 +1709,24 @@ var AppLogic = (function () {
       }
       return pList.then(function (lr) {
         done();
-        if (my === S.loadSeq && S.cls === c) applyList(lr);
+        if (my === S.loadSeq && S.cls === c) applyList(lr, listStart);
       });
     });
   }
-  function applyList(res) {
+  // start：一覧を読みに出したときの保存の時計。そのあとに保存の答えが来た申込は、一覧の答えが古いので使わない
+  function applyList(res, start) {
     if (res.ok && Array.isArray(res.data)) {
       S.list = res.data;
       S.listTime = timeNow();
       say($('list-msg'), '');
+      // まだ保存していない変更がある申込・一覧の答えより保存の答えが新しい申込は、サーバーの最後の中身＋変更から色を出す
+      S.list.forEach(function (r) {
+        var stale = start !== undefined && L.isStaleResponse(start, S.savedAt[r.id]);
+        if (!S.base[r.id] || !(stale || Q.pendingFor(r.id))) return;
+        var d = L.applyChanges(S.base[r.id], Q.pendingFor(r.id), new Date());
+        r.view = d.view;
+        r.memo = d.memo;
+      });
       if (S.openId && !findRow(S.openId)) { S.openId = ''; S.detail = null; }
     } else if (!res.relogin) {
       say($('list-msg'), '一覧を読めませんでした：' + jaError(res.error), 'error');
@@ -1412,13 +1734,17 @@ var AppLogic = (function () {
     renderList();
     renderHeader();
   }
+  // 一覧を読み直す。ためた保存を送り終わってから読む（古い一覧で印が消えて見えないように）
   function refreshList(quiet) {
     var c = S.cls;
     var my = ++S.listSeq;
     if (!quiet) say($('list-msg'), '読み込んでいます…', 'info');
-    return send('list', {}).then(function (res) {
-      if (S.cls !== c || my !== S.listSeq) return;
-      applyList(res);
+    return Q.flushNow().then(function () {
+      var start = S.saveClock;
+      return send('list', {}).then(function (res) {
+        if (S.cls !== c || my !== S.listSeq) return;
+        applyList(res, start);
+      });
     });
   }
 
@@ -1447,6 +1773,7 @@ var AppLogic = (function () {
     renderWho();
   }
   function setView(v) {
+    if (v !== S.view) Q.flushNow();
     S.view = v;
     $('view-make').hidden = v !== 'make';
     $('view-list').hidden = v !== 'list';
@@ -1908,6 +2235,7 @@ var AppLogic = (function () {
   function passFilter(r) {
     var v = r.view || {};
     if (r.id === S.openId) return true; // 開いている行は、取り消した直後なども消さない
+    if (S.failed[r.id]) return true;    // 保存できなかった行は、しぼりこみで隠さない
     // 取り消しは隠す。ただし後始末（METISの請求を消す）がある取り消しは出す
     if (v.cancelled && !(v.cleanup > 0) && !$('f-cancel').checked) return false;
     var st = $('f-status').value;
@@ -1941,6 +2269,13 @@ var AppLogic = (function () {
     sel.value = months.indexOf(cur) >= 0 ? cur : '';
   }
   function renderList() {
+    // 中身で文字・日付を打っている（変換中もふくむ）ときは作り直さない：一覧の行だけその場で直し、打ち終わってから描き直す
+    if (typingInDetail()) {
+      S.redrawPending = true;
+      S.list.forEach(function (r) { patchRowDom(r.id); });
+      return;
+    }
+    S.redrawPending = false;
     renderMonthFilter();
     $('list-time').textContent = S.listTime ? S.listTime + ' に読み込みました' : '';
     var body = $('list-body');
@@ -1950,7 +2285,7 @@ var AppLogic = (function () {
       var v = r.view || {};
       var open = r.id === S.openId;
       var color = 'c-' + (v.color || 'none');
-      var tr = h('tr', { class: 'r ' + color + (open ? ' open' : ''), tabindex: '0',
+      var tr = h('tr', { class: 'r ' + color + (open ? ' open' : '') + (S.failed[r.id] ? ' save-failed' : ''), tabindex: '0', 'data-id': r.id,
         'aria-expanded': open ? 'true' : 'false',
         onclick: function () { openRow(r.id); },
         onkeydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(r.id); } } }, [
@@ -1960,7 +2295,8 @@ var AppLogic = (function () {
         h('td', { class: 'nw', text: r.withdrawLabel || '' }),
         h('td', { class: 'nw' }, [v.label || r.status, v.isNew ? h('span', { class: 'new', text: '新しい' }) : null]),
         h('td', { class: 'memo', text: r.memo || '', title: r.memo || '' }),
-        h('td', { class: 'next-cell' }, [h('span', { class: 'next', text: v.next || v.label || r.status })])
+        h('td', { class: 'next-cell' }, [h('span', { class: 'next', text: v.next || v.label || r.status }),
+          S.failed[r.id] ? h('span', { class: 'fail-tag', text: '保存できませんでした' }) : null])
       ]);
       body.appendChild(tr);
       if (open) {
@@ -1981,6 +2317,7 @@ var AppLogic = (function () {
     r.memo = d.memo;
   }
   function openRow(id) {
+    Q.flushNow(); // 閉じる・ほかを開く前に、ためた保存を送る（待たない。画面はそのまま）
     if (S.openId === id) {
       S.openId = '';
       S.detail = null;
@@ -1998,29 +2335,127 @@ var AppLogic = (function () {
     renderList();
     loadDetail(id);
   }
+  // 中身を読む。この申込の保存を送っている・ためているなら、送り終わってから読む。
+  // 読んでいる間にこの申込の保存の答えが来たら、読んだ答えは古いので捨てる（保存の答えの方を出す）
   function loadDetail(id) {
     var my = ++S.openSeq;
-    send('open', { id: id }).then(function (res) {
+    var go = function () {
       if (my !== S.openSeq || S.openId !== id) return;
-      if (res.ok && res.data) {
-        S.detail = res.data;
-        S.detailErr = '';
-        patchRow(res.data);
-      } else {
-        S.detailErr = res.relogin ? 'ログインし直してから、もう一度行を押してください' : jaError(res.error);
-      }
-      renderList();
-      renderHeader();
-    });
+      var start = S.saveClock;
+      send('open', { id: id }).then(function (res) {
+        if (my !== S.openSeq || S.openId !== id) return;
+        if (res.ok && res.data && L.isStaleResponse(start, S.savedAt[id])) {
+          if (S.base[id]) { S.detailErr = ''; redisplay(id, true); } else loadDetail(id);
+          return;
+        }
+        if (res.ok && res.data) {
+          S.base[id] = res.data;
+          S.detailErr = '';
+          redisplay(id, true); // まだ届いていない変更があれば、かぶせて出す
+          return;
+        } else {
+          S.detailErr = res.relogin ? 'ログインし直してから、もう一度行を押してください' : jaError(res.error);
+        }
+        renderList();
+        renderHeader();
+      });
+    };
+    if (Q.busyFor(id)) Q.flushNow().then(go); else go();
   }
-  // 中で押したもの（書く op）。終わったら中と行を新しくする
+  // 中身の中で文字・日付を打っている（変換中もふくむ）か
+  function typingInDetail() {
+    var a = document.activeElement;
+    return L.shouldDeferRedraw(a ? { tag: a.tagName, type: a.type, inDetail: !!(a.closest && a.closest('tr.detail')) } : null, S.composing);
+  }
+  // 描き直しを後回しにしていたら、打ち終わったところで描き直す
+  function flushDeferred() {
+    if (!S.redrawPending || typingInDetail()) return;
+    S.redrawPending = false;
+    renderList();
+    renderHeader();
+  }
+  // 一覧の1行（色・札・メモ・保存できなかった印）だけをその場で直す（中身は作り直さない）
+  function patchRowDom(id) {
+    var r = findRow(id);
+    var tr = document.querySelector('#list-body tr.r[data-id="' + id + '"]');
+    if (!r || !tr) return;
+    var v = r.view || {};
+    tr.className = 'r c-' + (v.color || 'none') + (id === S.openId ? ' open' : '') + (S.failed[id] ? ' save-failed' : '');
+    var nx = tr.querySelector('.next');
+    if (nx) nx.textContent = v.next || v.label || r.status;
+    var tag = tr.querySelector('.fail-tag');
+    if (tag && !S.failed[id]) tag.parentNode.removeChild(tag);
+    if (!tag && S.failed[id] && nx) nx.parentNode.appendChild(h('span', { class: 'fail-tag', text: '保存できませんでした' }));
+    var memo = tr.querySelector('td.memo');
+    if (memo) { memo.textContent = r.memo || ''; memo.title = r.memo || ''; }
+    var det = tr.nextSibling;
+    if (det && det.classList && det.classList.contains('detail')) det.className = 'detail c-' + (v.color || 'none');
+    renderHeader();
+  }
+  // サーバーの最後の中身に、まだ届いていない変更をかぶせて、中と一覧の行を描き直す。
+  // 中身で文字・日付を打っているときは、一覧の行だけその場で直し、中身の描き直しは打ち終わるまで待つ
+  function redisplay(id, force) {
+    var base = S.base[id];
+    if (!base) return;
+    var d = L.applyChanges(base, Q.pendingFor(id), new Date());
+    if (S.openId === id) S.detail = d;
+    patchRow(d);
+    if (!(force || S.openId === id || findRow(id))) return;
+    renderList(); // 打っている途中なら、renderList が行だけ直して後回しにする
+    renderHeader();
+  }
+  // 保存できなかった申込を上に出す（閉じるを押すか、その申込が次に保存できるまで）
+  function renderSaveFail() {
+    var box = $('save-fail');
+    if (!box) return;
+    clear(box);
+    var ids = Object.keys(S.failed);
+    ids.forEach(function (id) {
+      box.appendChild(h('p', null, [S.failed[id].text,
+        h('button', { type: 'button', class: 'btn btn-sm', text: '閉じる', onclick: function () {
+          S.failed = L.noteSaveResult(S.failed, id, true);
+          renderSaveFail();
+          patchRowDom(id);
+        } })]));
+    });
+    box.hidden = ids.length === 0;
+    ids.forEach(patchRowDom);
+    Object.keys(S.base).forEach(function (id) { if (!S.failed[id]) patchRowDom(id); });
+  }
+  // 上の帯の「保存中…」「保存しました」
+  var savedTimer = null;
+  function renderSaveState(state) {
+    var el = $('save-state');
+    if (!el) return;
+    var text = { saving: '保存中…', saved: '保存しました', error: '保存できませんでした', relogin: 'ログインし直すと保存します' }[state] || '';
+    el.textContent = text;
+    el.className = 'save-state ' + state;
+    el.title = state === 'saving' || state === 'relogin' ? '保存が終わるまで、このページを閉じないでください' : '';
+    el.hidden = !text;
+    if (savedTimer) { clearTimeout(savedTimer); savedTimer = null; }
+    if (state === 'saved') savedTimer = setTimeout(function () { if (Q.state() === 'saved') el.hidden = true; }, 2500);
+  }
+  // 中の印を1つ変えた：すぐ画面に出し、保存はためる
+  function queueItem(row, patch) {
+    var id = S.openId;
+    if (!id || !S.base[id]) return;
+    Q.add(id, S.cls, row, patch);
+    S.detailMsg = null;
+    redisplay(id);
+  }
+  // 中で押したもの（サーバーで確かめる op：やめる・取り消す）。終わったら中と行を新しくする
   function detailWrite(op, args, done) {
     if (S.detailBusy) return;
     var id = S.openId;
     S.detailBusy = true;
     S.detailMsg = null;
     renderList();
-    send(op, args, L.newClientKey()).then(function (res) {
+    // ためた保存を先に送り終えてから（順番がいれかわらないように）
+    Q.flushNow().then(function () {
+      if (S.openId !== id) { S.detailBusy = false; return null; }
+      return send(op, args, L.newClientKey());
+    }).then(function (res) {
+      if (!res) return;
       S.detailBusy = false;
       if (S.openId !== id) return;
       if (res.ok) {
@@ -2032,52 +2467,52 @@ var AppLogic = (function () {
       renderHeader();
     });
   }
+  // やめる（サーバーで確かめる）
   function itemUpdate(row, patch) {
-    var args = { id: S.openId, row: row };
+    var id = S.openId;
+    var args = { id: id, row: row };
     for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) args[k] = patch[k];
     detailWrite('updateItem', args, function (d) {
-      S.detail = d;
+      S.base[id] = d;
       S.stopAsk = 0;
-      patchRow(d);
+      redisplay(id);
     });
   }
-  // 「まとめて」：この申込の「買う」の教材全部に、1つの段階の印を入れる（③は渡した日が空の教材だけ今日）
+  // 「まとめて」：この申込の「買う」の教材のうち、まだの教材に1つの段階の印を入れる（すぐ画面に出す）
   function bulkStage(stage) {
-    detailWrite('bulk', { id: S.openId, stage: stage }, function (d) {
-      S.detail = d;
-      S.stopAsk = 0;
-      patchRow(d);
+    if (!S.detail) return;
+    (S.detail.items || []).forEach(function (it) {
+      if (it.status !== '買う' || it[stage] === true) return;
+      var p = {};
+      p[stage] = true;
+      queueItem(it.row, p);
     });
   }
-  // 選んだ教材（左の□）に、上のカレンダーの日を渡した日として入れる
+  // 選んだ教材（左の□）に、上のカレンダーの日を渡した日として入れる（すぐ画面に出す）
   function setHandedForSelected(rows) {
-    if (!rows.length || !S.selDate) return;
-    detailWrite('bulk', { id: S.openId, stage: 'handed', date: S.selDate, rows: rows }, function (d) {
-      S.detail = d;
-      S.sel = {};
-      S.stopAsk = 0;
-      patchRow(d);
-    });
+    if (!rows.length || L.handedInputState(S.selDate, new Date()) !== 'ok') return;
+    var date = S.selDate;
+    S.sel = {};
+    rows.forEach(function (r) { queueItem(r, { handed: date }); });
   }
   function priceOf(it) {
     if (typeof it.price === 'number' && isFinite(it.price)) return it.price;
     return Number(String(it.priceLabel || '').replace(/[^\d]/g, '')) || 0;
   }
+  // メモ：すぐ画面に出し、ほかの印といっしょに保存する
   function saveMemo() {
     var id = S.openId;
+    if (!S.base[id]) return;
     var text = S.memoDraft[id] !== undefined ? S.memoDraft[id] : (S.detail.memo || '');
     if (text.length > 200) {
       S.detailMsg = { kind: 'error', text: 'メモは200文字までです' };
       renderList();
       return;
     }
-    detailWrite('memo', { id: id, text: text }, function (d) {
-      delete S.memoDraft[id];
-      if (S.detail) S.detail.memo = d.memo;
-      var r = findRow(id);
-      if (r) r.memo = d.memo;
-      S.detailMsg = { kind: 'ok', text: 'メモを保存しました' };
-    });
+    Q.addMemo(id, S.cls, text);
+    delete S.memoDraft[id];
+    S.detailMsg = null;
+    redisplay(id);
   }
   function cancelRequest() {
     var id = S.openId;
@@ -2184,11 +2619,11 @@ var AppLogic = (function () {
                 var st = L.handedInputState(v, new Date());
                 hint.hidden = st !== 'wait';
                 if (st === 'wait') return;
-                itemUpdate(it.row, { handed: st === 'clear' ? '' : v });
+                queueItem(it.row, { handed: st === 'clear' ? '' : v });
               } }), hint];
           } else {
             kids = [h('input', { type: 'checkbox', checked: done, disabled: busy, 'aria-label': it.name + '：' + s.head,
-              onchange: function (e) { var p = {}; p[s.key] = e.target.checked; itemUpdate(it.row, p); } })];
+              onchange: function (e) { var p = {}; p[s.key] = e.target.checked; queueItem(it.row, p); } })];
           }
           return h('td', { class: 'st nw c-' + s.color + (done ? '' : ' todo') }, kids);
         });
@@ -2269,7 +2704,7 @@ var AppLogic = (function () {
                 it.ordered ? '発注も取り消してください' : null]) : null,
               h('label', { class: 'check', style: 'margin-left:10px' }, [
                 h('input', { type: 'checkbox', checked: !!it.cleaned, disabled: busy, 'aria-label': it.name + '：請求を消した',
-                  onchange: function (e) { itemUpdate(it.row, { cleaned: e.target.checked }); } }), '消した'])
+                  onchange: function (e) { queueItem(it.row, { cleaned: e.target.checked }); } }), '消した'])
             ]);
           }
           return h('tr', { class: it.needsCleanup ? 'need-cleanup' : '' },
@@ -2337,6 +2772,7 @@ var AppLogic = (function () {
     var code = e.target.value;
     if (code === S.cls) return;
     if (S.creating) { e.target.value = S.cls; return; }
+    Q.flushNow(); // ためた保存は、ためたときの教室に送る
     S.openId = '';
     S.detail = null;
     loadClass(code);
@@ -2368,6 +2804,23 @@ var AppLogic = (function () {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     $('student').focus();
   });
+  // ページを離れる・隠れる前に、ためた保存を送る（keepalive で届くようにしている）
+  // まだ保存していない（送っている・ためている・ログイン待ち）ときは、離れる前にブラウザの確認を出す（これがいちばん確か）
+  window.addEventListener('beforeunload', function (e) {
+    if (!Q.hasWork()) return undefined;
+    Q.flushNow();
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  });
+  // 本当に閉じるときは、送っている分の答えを待たずに、ためた分も送ってみる
+  window.addEventListener('pagehide', function () { Q.flushNow(); Q.emergencyFlush(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') Q.flushNow(); });
+  // 中身の描き直しを後回しにしていたら：日本語の変換が終わった・どこかを押した・Tab で移ったあとに描き直す
+  document.addEventListener('compositionstart', function () { S.composing = true; });
+  document.addEventListener('compositionend', function () { S.composing = false; setTimeout(flushDeferred, 0); });
+  document.addEventListener('click', function () { setTimeout(flushDeferred, 0); });
+  document.addEventListener('keyup', function (e) { if (e.key === 'Tab') setTimeout(flushDeferred, 0); });
   ['f-status', 'f-month', 'f-cancel'].forEach(function (id) { $(id).addEventListener('change', renderList); });
   $('f-name').addEventListener('input', renderList);
 
