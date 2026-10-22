@@ -188,7 +188,26 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
   .d-actions { display: flex; flex-wrap: wrap; gap: 10px; }
   .counter { font-size: 13px; color: #5f6368; }
 
+  /* セット・よく使う教材 */
+  .sets-grid { display: grid; grid-template-columns: 280px 1fr; gap: 24px; }
+  .sets-list { list-style: none; margin: 8px 0; padding: 0; max-height: 520px; overflow-y: auto; }
+  .sets-list li button { width: 100%; text-align: left; padding: 8px 12px; border: 1px solid transparent; border-radius: 8px; background: none; cursor: pointer; }
+  .sets-list li button:hover { background: #f1f3f4; }
+  .sets-list li button.on, .sets-left .btn.on { background: #e8f0fe; border-color: #8ab4f8; font-weight: bold; }
+  .sets-list .cnt { color: #5f6368; font-size: 14px; margin-left: 6px; }
+  .ed-name { width: 360px; max-width: 100%; font-size: 17px; }
+  .ed-items td, .ed-items th { padding: 6px 8px; border-bottom: 1px solid #e3e5e8; text-align: left; vertical-align: middle; }
+  .ed-items th { font-size: 14px; color: #5f6368; font-weight: normal; }
+  .ed-items .ops { white-space: nowrap; text-align: right; }
+  .ed-items .ops button { margin-left: 4px; }
+  .missing { display: inline-block; margin-left: 6px; font-size: 12px; color: #fff; background: #A32D2D; border-radius: 6px; padding: 0 6px; }
+  .chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .chips button { border: 1px solid #c9ced6; background: #fff; border-radius: 999px; padding: 2px 12px; cursor: pointer; }
+  .chips button.on { background: #e8f0fe; border-color: #8ab4f8; color: #174ea6; font-weight: bold; }
+  .ed-dirty { color: #b3261e; font-weight: bold; font-size: 14px; }
+
   @media (max-width: 900px) {
+    .sets-grid { grid-template-columns: 1fr; }
     main { padding: 16px; }
     .top-in { padding: 10px 16px; }
     .pickers, .d-grid { grid-template-columns: 1fr; }
@@ -209,6 +228,7 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
     <nav id="tabs" class="tabs" hidden>
       <button type="button" id="tab-make" class="tab on">作る</button>
       <button type="button" id="tab-list" class="tab">一覧（新しい <span id="new-count">0</span>）</button>
+      <button type="button" id="tab-sets" class="tab">セット・よく使う</button>
     </nav>
     <button type="button" id="refresh" class="btn btn-sm" hidden>更新</button>
     <span class="spacer"></span>
@@ -369,6 +389,29 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
             <p><button type="button" id="next" class="btn">次の生徒を作る</button></p>
           </div>
         </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== セット・よく使う教材 ===== -->
+  <div id="view-sets" hidden>
+    <section id="leave-ask" class="card confirm" hidden>
+      <p>保存していない変更があります。捨てて移りますか？</p>
+      <div class="row">
+        <button type="button" id="leave-yes" class="btn btn-danger">捨てて移る</button>
+        <button type="button" id="leave-no" class="btn">もどる</button>
+      </div>
+    </section>
+    <section class="card">
+      <div class="sets-grid">
+        <div class="sets-left">
+          <h2>セット</h2>
+          <ul id="sets-list" class="sets-list"></ul>
+          <p><button type="button" id="set-new" class="btn">＋ 新しいセット</button></p>
+          <p><button type="button" id="fav-edit" class="btn">★ よく使う教材</button></p>
+          <p id="sets-msg" class="msg" hidden></p>
+        </div>
+        <div id="sets-editor" class="sets-right"></div>
       </div>
     </section>
   </div>
@@ -793,6 +836,127 @@ var AppLogic = (function () {
     return (savedAt || 0) > start;
   }
 
+  // ================= セット・よく使う教材の編集 =================
+
+  // ---- ここから Logic.gs と同じ（checkSetName・checkCodeList・replaceSetRows・removeSetRows・groupSets_）----
+  var SET_NAME_MAX = 40;
+  var SET_MAX_ITEMS = 18;
+  var FAV_MAX = 100;
+  var SET_NAME_RESERVED = '（セットを使わない）';
+  function checkSetName(name, names, oldName) {
+    var n = String(name === null || name === undefined ? '' : name).trim();
+    var bad = function (msg) { return { ok: false, name: n, error: msg }; };
+    if (typeof name !== 'string' || n === '') return bad('セットの名前を入れてください');
+    if (n.length > SET_NAME_MAX) return bad('セットの名前は40文字までです');
+    if (/^[=+\-@]/.test(n)) return bad('セットの名前は = + - @ で始められません');
+    if (n === SET_NAME_RESERVED) return bad('この名前は使えません');
+    var old = String(oldName === null || oldName === undefined ? '' : oldName).trim();
+    for (var i = 0; i < (names || []).length; i++) {
+      var m = String(names[i]).trim();
+      if (m === n && m !== old) return bad('同じ名前のセットがあります');
+    }
+    return { ok: true, name: n, error: null };
+  }
+  function checkCodeList(codes, min, max, label) {
+    if (!Array.isArray(codes)) return { ok: false, codes: [], error: 'badrequest' };
+    var out = [];
+    for (var i = 0; i < codes.length; i++) {
+      var c = codes[i];
+      if (typeof c !== 'string' && typeof c !== 'number') return { ok: false, codes: [], error: 'badrequest' };
+      var s = String(c).trim();
+      if (s === '' || out.indexOf(s) >= 0) continue;
+      out.push(s);
+    }
+    if (out.length < min) return { ok: false, codes: out, error: label + 'に教材を1冊以上入れてください' };
+    if (out.length > max) return { ok: false, codes: out, error: label + 'は' + max + '冊までです' };
+    return { ok: true, codes: out, error: null };
+  }
+  function replaceSetRows(rows, oldName, name, codes) {
+    var old = String(oldName === null || oldName === undefined ? '' : oldName).trim();
+    var add = codes.map(function (c) { return [name, String(c)]; });
+    var out = [];
+    var at = -1;
+    for (var i = 0; i < (rows || []).length; i++) {
+      var r = rows[i] || [];
+      var a = String(r[0] === null || r[0] === undefined ? '' : r[0]);
+      var b = String(r[1] === null || r[1] === undefined ? '' : r[1]);
+      if (a.trim() === '' && b.trim() === '') continue;
+      if (old !== '' && a.trim() === old) {
+        if (at < 0) at = out.length;
+        continue;
+      }
+      out.push([a, b]);
+    }
+    if (at < 0) return out.concat(add);
+    return out.slice(0, at).concat(add, out.slice(at));
+  }
+  function removeSetRows(rows, name) {
+    var n = String(name === null || name === undefined ? '' : name).trim();
+    var out = [];
+    for (var i = 0; i < (rows || []).length; i++) {
+      var r = rows[i] || [];
+      var a = String(r[0] === null || r[0] === undefined ? '' : r[0]);
+      var b = String(r[1] === null || r[1] === undefined ? '' : r[1]);
+      if (a.trim() === '' && b.trim() === '') continue;
+      if (a.trim() === n) continue;
+      out.push([a, b]);
+    }
+    return out;
+  }
+  function groupSets_(rows) {
+    var out = [];
+    var at = Object.create(null);
+    for (var i = 0; i < (rows || []).length; i++) {
+      var r = rows[i] || [];
+      var name = String(r[0] === null || r[0] === undefined ? '' : r[0]).trim();
+      var code = String(r[1] === null || r[1] === undefined ? '' : r[1]).trim();
+      if (name === '' || code === '') continue;
+      if (!(name in at)) {
+        at[name] = out.length;
+        out.push({ name: name, codes: [] });
+      }
+      var codes = out[at[name]].codes;
+      if (codes.indexOf(code) < 0) codes.push(code);
+    }
+    return out;
+  }
+  // ---- ここまで Logic.gs と同じ ----
+
+  // 並びの i 番目を d（-1 上・+1 下）へ動かした新しい並び（はしなら同じ並び）
+  function moveItem(list, i, d) {
+    var j = i + d;
+    if (i < 0 || i >= list.length || j < 0 || j >= list.length) return list.slice();
+    var out = list.slice();
+    var x = out[i];
+    out[i] = out[j];
+    out[j] = x;
+    return out;
+  }
+  // 「教材を足す」の候補。o = {mode: 'grade'|'all'|'fav', grade: 'sho'|'chu'|'kou'|'all', query, favorites, pattern（設定の学年でしぼる）, inList（今の並びのコード）, limit}
+  // master は [{code, name, price, target, key（normalizeQuery したコード＋名前）}]。{items: [{code, name, price, inList}], more（limit をこえた数）}
+  function pickCandidates(master, o) {
+    var q = normalizeQuery(o.query || '');
+    var pat = o.mode === 'grade' && o.pattern && o.grade && o.grade !== 'all' ? o.pattern[o.grade] : null;
+    var src = master;
+    if (o.mode === 'fav') {
+      var byCode = {};
+      master.forEach(function (m) { byCode[m.code] = m; });
+      src = (o.favorites || []).map(function (c) { return byCode[c]; }).filter(function (m) { return !!m; });
+    }
+    var inList = {};
+    (o.inList || []).forEach(function (c) { inList[c] = true; });
+    var hits = src.filter(function (m) {
+      if (q && String(m.key || normalizeQuery(m.code + ' ' + m.name)).indexOf(q) < 0) return false;
+      if (pat && !targetMatches(m.target, pat)) return false;
+      return true;
+    });
+    var limit = o.limit || 30;
+    return {
+      items: hits.slice(0, limit).map(function (m) { return { code: m.code, name: m.name, price: m.price, inList: !!inList[m.code] }; }),
+      more: Math.max(0, hits.length - limit)
+    };
+  }
+
   // ================= お試し（?mock=1）：偽の API。返す形は Staff.gs と同じ =================
   function createMockApi(now) {
     var base = now ? new Date(now.getTime()) : new Date();
@@ -806,7 +970,7 @@ var AppLogic = (function () {
 
     var MSG_NO_CLASS = 'この教室は開けません';
     var MSG_NOT_FOUND = 'この申込は見つかりません';
-    var WRITE_OPS = ['create', 'updateItem', 'bulk', 'batch', 'memo', 'cancel'];
+    var WRITE_OPS = ['create', 'updateItem', 'bulk', 'batch', 'memo', 'cancel', 'setSave', 'setDelete', 'favSave'];
     var STAGES = ['billed', 'ordered', 'handed', 'metis'];
     var MASTER = [
       { code: 'M001', name: '中1 数学 基礎ワーク', price: 1650, target: '中学生' },
@@ -864,6 +1028,14 @@ var AppLogic = (function () {
         { name: '生徒H', grade: '中学1年' }, { name: '生徒I', grade: '高校2年' }
       ] }
     };
+    // 教室ごとのセットのシートの A:B（[セット名, コード]）と、よく使う教材の A列
+    Object.keys(classes).forEach(function (k) {
+      var rows = [];
+      SETS.forEach(function (s) { s.codes.forEach(function (c) { rows.push([s.name, c]); }); });
+      classes[k].setRows = rows;
+      classes[k].favs = FAVS.slice();
+    });
+    var masterHas = function (code) { return Object.prototype.hasOwnProperty.call(masterMap, code); };
     var cache = Object.create(null);
 
     function findReq(c, id) {
@@ -977,7 +1149,7 @@ var AppLogic = (function () {
           cls: { code: x.cls, name: x.c.name },
           students: x.c.students,
           duplicates: findDuplicateNames(x.c.students.map(function (s) { return s.name; })),
-          sets: SETS, favorites: FAVS, master: MASTER, pickPattern: PICK
+          sets: groupSets_(x.c.setRows), favorites: x.c.favs.slice(), master: MASTER, pickPattern: PICK
         } };
       },
       history: function (x) {
@@ -1089,6 +1261,39 @@ var AppLogic = (function () {
         if (typeof a.metis === 'boolean') item.metis = a.metis;
         if (a.stop === true) item.status = 'やめた';
         return { ok: true, data: openView(x, req) };
+      },
+      // Staff.gs の staffSetSave_・staffSetDelete_・staffFavSave_ と同じ
+      setSave: function (x) {
+        var a = x.args;
+        if (a.oldName !== undefined && typeof a.oldName !== 'string') return { ok: false, error: 'badrequest' };
+        var oldName = typeof a.oldName === 'string' ? a.oldName.trim() : '';
+        var names = groupSets_(x.c.setRows).map(function (s) { return s.name; });
+        if (oldName !== '' && names.indexOf(oldName) < 0) return { ok: false, error: 'このセットは見つかりません（ほかの人が消したかもしれません）' };
+        var nm = checkSetName(a.name, names, oldName);
+        if (!nm.ok) return { ok: false, error: nm.error };
+        var cl = checkCodeList(a.codes, 1, SET_MAX_ITEMS, 'セット');
+        if (!cl.ok) return { ok: false, error: cl.error };
+        var miss = cl.codes.filter(function (c) { return !masterHas(c); });
+        if (miss.length) return { ok: false, error: '見つからないコード：' + miss.join('、') };
+        x.c.setRows = replaceSetRows(x.c.setRows, oldName, nm.name, cl.codes);
+        return { ok: true, data: { sets: groupSets_(x.c.setRows), favorites: x.c.favs.slice() } };
+      },
+      setDelete: function (x) {
+        var name = typeof x.args.name === 'string' ? x.args.name.trim() : '';
+        if (name === '') return { ok: false, error: 'badrequest' };
+        if (groupSets_(x.c.setRows).map(function (s) { return s.name; }).indexOf(name) < 0) {
+          return { ok: false, error: 'このセットは見つかりません（ほかの人が消したかもしれません）' };
+        }
+        x.c.setRows = removeSetRows(x.c.setRows, name);
+        return { ok: true, data: { sets: groupSets_(x.c.setRows), favorites: x.c.favs.slice() } };
+      },
+      favSave: function (x) {
+        var cl = checkCodeList(x.args.codes, 0, FAV_MAX, 'よく使う教材');
+        if (!cl.ok) return { ok: false, error: cl.error };
+        var miss = cl.codes.filter(function (c) { return !masterHas(c); });
+        if (miss.length) return { ok: false, error: '見つからないコード：' + miss.join('、') };
+        x.c.favs = cl.codes;
+        return { ok: true, data: { sets: groupSets_(x.c.setRows), favorites: x.c.favs.slice() } };
       },
       // Staff.gs の staffBatch_ と同じ：全部確かめてから書く（1つでもだめなら何も書かない）
       batch: function (x) {
@@ -1408,6 +1613,8 @@ var AppLogic = (function () {
     newClientKey: newClientKey, yen: yen, addOne: addOne, setPicks: setPicks, formatDate: formatDate, createMockApi: createMockApi,
     requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState, handedInputHint: handedInputHint,
     applyChanges: applyChanges, mergePend: mergePend, createSaveQueue: createSaveQueue,
+    checkSetName: checkSetName, checkCodeList: checkCodeList, replaceSetRows: replaceSetRows, removeSetRows: removeSetRows,
+    moveItem: moveItem, pickCandidates: pickCandidates, SET_MAX_ITEMS: SET_MAX_ITEMS, FAV_MAX: FAV_MAX,
     shouldDeferRedraw: shouldDeferRedraw, saveFailText: saveFailText, noteSaveResult: noteSaveResult, isStaleResponse: isStaleResponse
   };
 })();
@@ -1556,6 +1763,7 @@ var AppLogic = (function () {
     var app = name === 'app';
     $('view-make').hidden = !app || S.view !== 'make';
     $('view-list').hidden = !app || S.view !== 'list';
+    $('view-sets').hidden = !app || S.view !== 'sets';
     $('cls-box').hidden = !app;
     $('tabs').hidden = !app;
     $('refresh').hidden = !app;
@@ -1689,6 +1897,9 @@ var AppLogic = (function () {
   }
   function applyInit(d) {
     takeInit(d);
+    S.ed = null;        // 教室が変わったら、セットの編集は閉じる
+    S.leaveAsk = null;
+    renderSetsView();
     S.list = [];
     S.openId = '';
     S.detail = null;
@@ -1717,6 +1928,7 @@ var AppLogic = (function () {
       if (res.ok && res.data && res.data.cls && res.data.cls.code === c) {
         takeInit(res.data);
         if (!S.sets.some(function (s) { return s.name === S.setName; })) S.setName = NO_SET;
+        renderSetsLeft(); // セット・よく使うの左の一覧も新しくする（開いている編集はそのまま）
         renderHeader();
         renderStudentOptions();
         renderMonths();
@@ -1791,13 +2003,18 @@ var AppLogic = (function () {
     $('new-count').textContent = String(n);
     $('tab-make').className = 'tab' + (S.view === 'make' ? ' on' : '');
     $('tab-list').className = 'tab' + (S.view === 'list' ? ' on' : '');
+    $('tab-sets').className = 'tab' + (S.view === 'sets' ? ' on' : '');
     renderWho();
   }
   function setView(v) {
+    // セットの編集で保存していない変更があれば、移る前に確かめる
+    if (S.view === 'sets' && v !== 'sets' && !guardLeave(function () { setView(v); })) return;
     if (v !== S.view) Q.flushNow();
     S.view = v;
     $('view-make').hidden = v !== 'make';
     $('view-list').hidden = v !== 'list';
+    $('view-sets').hidden = v !== 'sets';
+    if (v === 'sets') renderSetsView();
     renderHeader();
     if (v === 'list') {
       renderList();
@@ -2072,7 +2289,7 @@ var AppLogic = (function () {
     var shown = favs.filter(function (m) { return !pat || L.targetMatches(m.target, pat); });
     shown.forEach(function (m) { fav.appendChild(pickLine(m)); });
     var note = '';
-    if (!S.favorites.length) note = '教室の表の「よく使う教材」シートで登録します';
+    if (!S.favorites.length) note = '上の「セット・よく使う」で登録します';
     else if (!shown.length) note = 'この学年に合うよく使う教材はありません';
     else if (pat) note = S.grade + 'に合うものだけ';
     else note = '生徒を選ぶと学年でしぼります';
@@ -2816,14 +3033,290 @@ var AppLogic = (function () {
     if (busy) box.appendChild(h('p', { class: 'muted', text: '送っています…' }));
   }
 
+  // ================= セット・よく使う教材 =================
+  // S.ed：開いている編集 {kind: 'set'|'fav', oldName（新しいセットは ''）, name, codes, base（保存した形）, mode, grade, query, busy, delAsk, msg}
+  var GRADE_CHIPS = [['sho', '小学'], ['chu', '中学'], ['kou', '高校'], ['all', '全部']];
+  var ED = {}; // 編集の画面の部品（名前・さがす欄は作り直さない）
+  function edSnapshot(ed) { return JSON.stringify({ name: ed.kind === 'set' ? String(ed.name).trim() : '', codes: ed.codes }); }
+  function edDirty() { return !!S.ed && edSnapshot(S.ed) !== S.ed.base; }
+  // 保存していない変更があれば、画面の中で確かめる（fn は「捨てて移る」で動く）。すぐ移ってよければ true
+  function guardLeave(fn) {
+    if (!edDirty()) return true;
+    S.leaveAsk = fn;
+    $('leave-ask').hidden = false;
+    if (S.view !== 'sets') { S.view = 'sets'; showPane('app'); renderHeader(); }
+    window.scrollTo(0, 0);
+    return false;
+  }
+  function openEditor(kind, name) {
+    if (!guardLeave(function () { openEditor(kind, name); })) return;
+    var codes = [];
+    if (kind === 'fav') codes = S.favorites.slice();
+    else if (name) S.sets.forEach(function (s) { if (s.name === name) codes = s.codes.slice(); });
+    var prev = S.ed || {};
+    S.ed = { kind: kind, oldName: kind === 'set' ? (name || '') : '', name: kind === 'set' ? (name || '') : '', codes: codes,
+      mode: kind === 'fav' ? 'grade' : (prev.mode || 'grade'), grade: prev.grade || 'chu', query: '', busy: false, delAsk: false, msg: null };
+    if (kind === 'fav' && S.ed.mode === 'fav') S.ed.mode = 'grade';
+    S.ed.base = edSnapshot(S.ed);
+    say($('sets-msg'), '');
+    renderSetsView();
+    if (kind === 'set' && !name && ED.name) ED.name.focus();
+  }
+  function renderSetsLeft() {
+    var ul = $('sets-list');
+    clear(ul);
+    var ed = S.ed;
+    S.sets.forEach(function (s) {
+      var on = ed && ed.kind === 'set' && ed.oldName === s.name;
+      ul.appendChild(h('li', null, [h('button', { type: 'button', class: on ? 'on' : '', onclick: function () { openEditor('set', s.name); } },
+        [s.name, h('span', { class: 'cnt', text: s.codes.length + '冊' })])]));
+    });
+    if (!S.sets.length) ul.appendChild(h('li', { class: 'muted small', text: 'まだセットはありません' }));
+    $('set-new').className = 'btn' + (ed && ed.kind === 'set' && !ed.oldName ? ' on' : '');
+    $('fav-edit').className = 'btn' + (ed && ed.kind === 'fav' ? ' on' : '');
+    $('fav-edit').textContent = '★ よく使う教材（' + S.favorites.length + '冊）';
+  }
+  function renderSetsView() {
+    if (!$('sets-editor')) return;
+    renderSetsLeft();
+    $('leave-ask').hidden = !S.leaveAsk;
+    var box = $('sets-editor');
+    clear(box);
+    ED = {};
+    var ed = S.ed;
+    if (!ed) {
+      box.appendChild(h('p', { class: 'empty', text: '左からセットを選ぶか、「＋ 新しいセット」「★ よく使う教材」を押してください。ここで直すと、「作る」のセットとよく使う教材にすぐ出ます。' }));
+      return;
+    }
+    var isSet = ed.kind === 'set';
+    var head;
+    if (isSet) {
+      ED.name = h('input', { type: 'text', class: 'ed-name', value: ed.name, maxlength: '40', 'aria-label': 'セットの名前', placeholder: '例：中1 基本セット',
+        oninput: function (e) { ed.name = e.target.value; renderEdStatus(); } });
+      head = h('div', { class: 'row' }, [h('label', { class: 'check' }, ['セットの名前：', ED.name])]);
+    } else {
+      head = h('h2', { text: '★ よく使う教材' });
+    }
+    box.appendChild(head);
+    box.appendChild(h('p', { class: 'small muted', style: 'margin:4px 0 0', text: isSet ?
+      (ed.oldName ? '名前を変えると、「作る」のセットの名前も変わります。' : '新しいセットです。名前と教材を入れて「保存」を押してください。') :
+      '「作る」の「よく使う教材」に、この順で出ます（100冊まで）。' }));
+    ED.items = h('div', { style: 'margin-top:12px' });
+    box.appendChild(ED.items);
+    // 教材を足す
+    var modes = [['grade', '学年でしぼる'], ['all', '全部']].concat(isSet ? [['fav', 'よく使う']] : []);
+    ED.modeBox = h('div', { class: 'seg seg-filter', role: 'group', 'aria-label': '教材のさがし方' });
+    ED.chips = h('div', { class: 'chips', role: 'group', 'aria-label': '学年' });
+    ED.search = h('input', { type: 'search', placeholder: '教材名・コードの一部', autocomplete: 'off', value: ed.query, 'aria-label': '教材をさがす',
+      oninput: function (e) { ed.query = e.target.value; renderEdPicks(); } });
+    ED.picks = h('ul', { class: 'picks' });
+    ED.pickNote = h('p', { class: 'small muted', style: 'margin:6px 0 0' });
+    box.appendChild(h('div', { class: 'picker', style: 'margin-top:16px' }, [
+      h('div', { class: 'picker-head' }, [h('h3', { text: '教材を足す' }), ED.modeBox, ED.chips]),
+      ED.search, ED.picks, ED.pickNote
+    ]));
+    ED.modes = modes;
+    // 保存・消す
+    ED.status = h('span', { class: 'ed-dirty' });
+    ED.save = h('button', { type: 'button', class: 'btn-main', text: '保存', onclick: saveEditor });
+    var acts = h('div', { class: 'row', style: 'margin-top:16px' }, [ED.save, ED.status]);
+    if (isSet && ed.oldName) {
+      acts.appendChild(h('span', { class: 'spacer' }));
+      acts.appendChild(h('button', { type: 'button', class: 'btn', text: 'このセットを消す', disabled: ed.busy,
+        onclick: function () { ed.delAsk = true; renderSetsView(); } }));
+    }
+    box.appendChild(acts);
+    if (isSet && ed.oldName && ed.delAsk) {
+      box.appendChild(h('div', { class: 'confirm' }, [
+        h('p', { text: 'セット「' + ed.oldName + '」を消しますか？（作った申込にはえいきょうしません）' }),
+        h('div', { class: 'row' }, [
+          h('button', { type: 'button', class: 'btn btn-danger', text: '消す', disabled: ed.busy, onclick: deleteEditorSet }),
+          h('button', { type: 'button', class: 'btn', text: 'やめる', disabled: ed.busy, onclick: function () { ed.delAsk = false; renderSetsView(); } })
+        ])
+      ]));
+    }
+    ED.msg = h('p', { class: 'msg', hidden: true });
+    box.appendChild(ED.msg);
+    if (ed.msg) say(ED.msg, ed.msg.text, ed.msg.kind);
+    renderEdItems();
+    renderEdPicks();
+    renderEdStatus();
+  }
+  // 並んでいる教材（↑ ↓ ×）
+  function renderEdItems() {
+    var ed = S.ed;
+    if (!ed || !ED.items) return;
+    clear(ED.items);
+    var max = ed.kind === 'set' ? L.SET_MAX_ITEMS : L.FAV_MAX;
+    ED.items.appendChild(h('h3', { text: (ed.kind === 'set' ? 'セットの教材　' : 'よく使う教材　') + ed.codes.length + '冊（' + max + '冊まで）' }));
+    if (!ed.codes.length) {
+      ED.items.appendChild(h('p', { class: 'empty', text: '下の「教材を足す」から選んでください。' }));
+      return;
+    }
+    var tb = h('tbody');
+    ed.codes.forEach(function (code, i) {
+      var m = S.masterMap[code];
+      tb.appendChild(h('tr', null, [
+        h('td', { class: 'muted', text: String(i + 1) }),
+        h('td', null, [m ? m.name : '（教材マスタにない教材）', h('span', { class: 'code', text: code }), m ? null : h('span', { class: 'missing', text: '×で外してください' })]),
+        h('td', { class: 'nw', text: m ? L.yen(m.price) : '' }),
+        h('td', { class: 'ops' }, [
+          h('button', { type: 'button', class: 'btn btn-sm', text: '↑', disabled: i === 0 || ed.busy, 'aria-label': '上へ',
+            onclick: function () { ed.codes = L.moveItem(ed.codes, i, -1); renderEdItems(); renderEdStatus(); } }),
+          h('button', { type: 'button', class: 'btn btn-sm', text: '↓', disabled: i === ed.codes.length - 1 || ed.busy, 'aria-label': '下へ',
+            onclick: function () { ed.codes = L.moveItem(ed.codes, i, 1); renderEdItems(); renderEdStatus(); } }),
+          h('button', { type: 'button', class: 'x', text: '×', disabled: ed.busy, 'aria-label': (m ? m.name : code) + 'を外す',
+            onclick: function () { ed.codes = ed.codes.filter(function (c) { return c !== code; }); renderEdItems(); renderEdPicks(); renderEdStatus(); } })
+        ])
+      ]));
+    });
+    ED.items.appendChild(h('table', { class: 'ed-items' }, [
+      h('thead', null, [h('tr', null, [h('th', { text: '' }), h('th', { text: '教材' }), h('th', { text: '値段' }), h('th', { text: '' })])]), tb]));
+  }
+  // 「教材を足す」の候補（さがす欄は作り直さない）
+  function renderEdPicks() {
+    var ed = S.ed;
+    if (!ed || !ED.picks) return;
+    clear(ED.modeBox);
+    ED.modes.forEach(function (md) {
+      ED.modeBox.appendChild(h('button', { type: 'button', class: ed.mode === md[0] ? 'on' : '', 'aria-pressed': ed.mode === md[0] ? 'true' : 'false', text: md[1],
+        onclick: function () { ed.mode = md[0]; renderEdPicks(); } }));
+    });
+    clear(ED.chips);
+    ED.chips.hidden = ed.mode !== 'grade';
+    GRADE_CHIPS.forEach(function (g) {
+      ED.chips.appendChild(h('button', { type: 'button', class: ed.grade === g[0] ? 'on' : '', 'aria-pressed': ed.grade === g[0] ? 'true' : 'false', text: g[1],
+        onclick: function () { ed.grade = g[0]; renderEdPicks(); } }));
+    });
+    var max = ed.kind === 'set' ? L.SET_MAX_ITEMS : L.FAV_MAX;
+    var full = ed.codes.length >= max;
+    var res = L.pickCandidates(S.master, { mode: ed.mode, grade: ed.grade, query: ed.query, favorites: S.favorites,
+      pattern: S.pickPattern, inList: ed.codes, limit: 30 });
+    clear(ED.picks);
+    var needQuery = ed.mode === 'all' && !L.normalizeQuery(ed.query);
+    if (!needQuery) {
+      res.items.forEach(function (m) {
+        ED.picks.appendChild(h('li', null, [
+          h('span', { class: 'p-name' }, [m.name, h('span', { class: 'code', text: m.code })]),
+          h('span', { class: 'p-price', text: L.yen(m.price) }),
+          h('button', { type: 'button', class: 'btn btn-sm', text: m.inList ? '入っています' : '足す', disabled: m.inList || full || ed.busy,
+            onclick: function () { if (ed.codes.indexOf(m.code) < 0 && ed.codes.length < max) ed.codes = ed.codes.concat([m.code]); renderEdItems(); renderEdPicks(); renderEdStatus(); } })
+        ]));
+      });
+    }
+    var note = '';
+    if (full) note = max + '冊までです。足すときは、どれかを外してください。';
+    else if (needQuery) note = '教材名やコードの一部を打ってください。';
+    else if (!res.items.length) note = ed.mode === 'fav' ? (S.favorites.length ? '見つかりません。' : 'よく使う教材はまだありません。') : '見つかりません。' + (ed.mode === 'grade' ? '「全部」にすると、ほかの学年の教材もさがせます。' : '');
+    else if (res.more) note = 'ほか ' + res.more + '件。もっと文字を打つとしぼれます。';
+    ED.pickNote.textContent = note;
+  }
+  function renderEdStatus() {
+    if (!S.ed || !ED.status) return;
+    ED.status.textContent = edDirty() ? '保存していない変更があります' : '';
+    ED.save.disabled = S.ed.busy || !edDirty();
+    ED.save.textContent = S.ed.busy ? '保存しています…' : '保存';
+  }
+  function setEdMsg(kind, text) {
+    if (!S.ed) return;
+    S.ed.msg = text ? { kind: kind, text: text } : null;
+    if (ED.msg) say(ED.msg, text, kind);
+  }
+  // 保存のあと：作る画面のセットの▼・よく使う教材もすぐ新しくする
+  function applySetsData(d) {
+    S.sets = Array.isArray(d.sets) ? d.sets : S.sets;
+    S.favorites = Array.isArray(d.favorites) ? d.favorites : S.favorites;
+    if (S.setName !== NO_SET && !S.sets.some(function (s) { return s.name === S.setName; })) S.setName = NO_SET;
+    renderSets();
+    renderPickers();
+  }
+  function saveEditor() {
+    var ed = S.ed;
+    if (!ed || ed.busy || !edDirty()) return;
+    var op, args;
+    if (ed.kind === 'set') {
+      var nm = L.checkSetName(ed.name, S.sets.map(function (s) { return s.name; }), ed.oldName);
+      if (!nm.ok) { setEdMsg('error', nm.error); return; }
+      var cl = L.checkCodeList(ed.codes, 1, L.SET_MAX_ITEMS, 'セット');
+      if (!cl.ok) { setEdMsg('error', cl.error); return; }
+      var miss = cl.codes.filter(function (c) { return !S.masterMap[c]; });
+      if (miss.length) { setEdMsg('error', '教材マスタにない教材を外してください：' + miss.join('、')); return; }
+      op = 'setSave';
+      args = { oldName: ed.oldName, name: nm.name, codes: cl.codes };
+    } else {
+      var fl = L.checkCodeList(ed.codes, 0, L.FAV_MAX, 'よく使う教材');
+      if (!fl.ok) { setEdMsg('error', fl.error); return; }
+      op = 'favSave';
+      args = { codes: fl.codes };
+    }
+    ed.busy = true;
+    setEdMsg('info', '保存しています…');
+    renderEdStatus();
+    send(op, args, L.newClientKey()).then(function (res) {
+      ed.busy = false;
+      if (S.ed !== ed) return;
+      if (res.ok && res.data) {
+        applySetsData(res.data);
+        if (ed.kind === 'set') { ed.oldName = args.name; ed.name = args.name; ed.codes = args.codes.slice(); }
+        else ed.codes = S.favorites.slice();
+        ed.base = edSnapshot(ed);
+        ed.msg = { kind: 'ok', text: '保存しました。「作る」にもう出ています' };
+        renderSetsView();
+      } else {
+        setEdMsg('error', res.relogin ? 'ログインし直してから、もう一度「保存」を押してください' : jaError(res.error));
+        renderEdStatus();
+      }
+    });
+  }
+  function deleteEditorSet() {
+    var ed = S.ed;
+    if (!ed || ed.busy || ed.kind !== 'set' || !ed.oldName) return;
+    ed.busy = true;
+    renderSetsView();
+    send('setDelete', { name: ed.oldName }, L.newClientKey()).then(function (res) {
+      ed.busy = false;
+      if (S.ed !== ed) return;
+      if (res.ok && res.data) {
+        applySetsData(res.data);
+        var gone = ed.oldName;
+        S.ed = null;
+        renderSetsView();
+        say($('sets-msg'), 'セット「' + gone + '」を消しました', 'ok');
+      } else {
+        ed.delAsk = false;
+        ed.msg = { kind: 'error', text: res.relogin ? 'ログインし直してから、もう一度押してください' : jaError(res.error) };
+        renderSetsView();
+      }
+    });
+  }
+
   // ================= つなぐ =================
   $('tab-make').addEventListener('click', function () { setView('make'); });
   $('tab-list').addEventListener('click', function () { setView('list'); });
+  $('tab-sets').addEventListener('click', function () { setView('sets'); });
+  $('set-new').addEventListener('click', function () { openEditor('set', ''); });
+  $('fav-edit').addEventListener('click', function () { openEditor('fav', ''); });
+  $('leave-yes').addEventListener('click', function () {
+    var fn = S.leaveAsk;
+    S.leaveAsk = null;
+    $('leave-ask').hidden = true;
+    if (S.ed) S.ed.base = edSnapshot(S.ed); // 変更を捨てる（このあと移る先で開き直す）
+    S.ed = null;
+    if (fn) fn();
+    renderSetsView();
+  });
+  $('leave-no').addEventListener('click', function () { S.leaveAsk = null; $('leave-ask').hidden = true; });
   $('refresh').addEventListener('click', refreshAll);
   $('cls-switch').addEventListener('change', function (e) {
     var code = e.target.value;
     if (code === S.cls) return;
     if (S.creating) { e.target.value = S.cls; return; }
+    if (edDirty()) {
+      // セットの編集で保存していない変更がある：確かめてから移る
+      e.target.value = S.cls;
+      guardLeave(function () { $('cls-switch').value = code; $('cls-switch').dispatchEvent(new Event('change')); });
+      return;
+    }
     Q.flushNow(); // ためた保存は、ためたときの教室に送る
     S.openId = '';
     S.detail = null;
@@ -2861,7 +3354,7 @@ var AppLogic = (function () {
   // ページを離れる・隠れる前に、ためた保存を送る（keepalive で届くようにしている）
   // まだ保存していない（送っている・ためている・ログイン待ち）ときは、離れる前にブラウザの確認を出す（これがいちばん確か）
   window.addEventListener('beforeunload', function (e) {
-    if (!Q.hasWork()) return undefined;
+    if (!Q.hasWork() && !edDirty()) return undefined;
     Q.flushNow();
     e.preventDefault();
     e.returnValue = '';
