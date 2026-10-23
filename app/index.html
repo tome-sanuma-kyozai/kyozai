@@ -431,11 +431,15 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
             <option value="metis">④ 引き渡し日がまだ</option>
             <option value="remind">催促する</option>
             <option value="none">未回答</option>
+            <option value="done">済み（終わった物）</option>
+            <option value="declined">申し込まない（終わった物）</option>
+            <option value="cancelled">取り消し（終わった物）</option>
           </select>
         </label>
         <label>引き落とし <select id="f-month"><option value="">すべて</option></select></label>
         <label>生徒 <input type="search" id="f-name" placeholder="名前で探す" autocomplete="off"></label>
-        <label class="check"><input type="checkbox" id="f-cancel">取り消しも出す</label>
+        <label class="check"><input type="checkbox" id="f-done">終わった物も出す</label>
+        <span id="list-hidden" class="small muted" hidden></span>
         <span class="spacer"></span>
         <span id="list-time" class="small muted"></span>
       </div>
@@ -450,7 +454,7 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
         <span class="c-gray"><i class="sw"></i>申し込まない・取り消し</span>
         <span><b class="new" style="margin:0">新しい</b>保護者が答えて、まだ開いていない</span>
       </p>
-      <p class="legend-note muted">色は、「買う」の教材のうち、いちばん前で止まっている段階（① → ② → ③ → ④）。行を押すと中身が開きます。</p>
+      <p class="legend-note muted">色は、「買う」の教材のうち、いちばん前で止まっている段階（① → ② → ③ → ④）。行を押すと中身が開きます。終わった物（緑の済み・灰の申し込まない／取り消し）はふだん隠しています。見るときは「終わった物も出す」にチェック。</p>
       <p id="list-msg" class="msg" hidden></p>
       <div class="table-wrap">
         <table class="list">
@@ -834,6 +838,53 @@ var AppLogic = (function () {
   // 古い答えか：要求を出したとき（start）より、その申込の保存の答えがあとに来ていれば古い（捨てる）
   function isStaleResponse(start, savedAt) {
     return (savedAt || 0) > start;
+  }
+
+  // ================= 一覧の絞りこみ =================
+
+  // 終わった申込か：緑（①〜④が全部済み）と、灰（申し込まない・取り消し・取り消し（申込後）で後始末がない）。
+  // 後始末がいる取り消しは赤なので、終わった物には入らない
+  function isFinishedView(v) {
+    v = v || {};
+    return v.color === 'green' || v.color === 'gray';
+  }
+  function monthOfLabel(label) {
+    var m = /^(\d+)年(\d+)月/.exec(label || '');
+    return m ? m[1] + '年' + m[2] + '月' : '';
+  }
+  // 一覧の1行を出すか。o = {status（状態の▼）, month, query（生徒の名前）, showDone（終わった物も出す）, openId, failed（保存できなかった申込）}
+  // 開いている行・保存できなかった行は、どの絞りこみでも出す。終わった物は、showDone か、状態の▼で終わった物（済み・申し込まない・取り消し）を選んだときだけ出す。
+  // ただし「新しい」の札がある行は、終わった物でも隠さない
+  var DONE_STATUSES = ['done', 'declined', 'cancelled'];
+  function listRowVisible(r, o) {
+    var v = r.view || {};
+    if (o.openId && r.id === o.openId) return true;
+    if (o.failed && o.failed[r.id]) return true;
+    var st = o.status || '';
+    if (isFinishedView(v) && !o.showDone && DONE_STATUSES.indexOf(st) < 0 && !v.isNew) return false;
+    var applied = r.status === '申し込む' && !v.cancelled;
+    if (st === 'none' && r.status !== '未回答') return false;
+    if (st === 'new' && !v.isNew) return false;
+    if (st === 'todo' && ['red', 'purple', 'blue', 'pink', 'orange'].indexOf(v.color) < 0) return false;
+    if (st === 'billed' && !(applied && v.unbilled > 0)) return false;
+    if (st === 'ordered' && !(applied && v.unordered > 0)) return false;
+    if (st === 'handed' && !(applied && v.unhanded > 0)) return false;
+    if (st === 'metis' && !(applied && v.metisLeft > 0)) return false;
+    if (st === 'remind' && v.color !== 'orange') return false;
+    if (st === 'done' && v.color !== 'green') return false;
+    if (st === 'declined' && !(r.status === '申し込まない' && v.color === 'gray')) return false;
+    if (st === 'cancelled' && !(v.cancelled && v.color === 'gray')) return false;
+    if (o.month && monthOfLabel(r.withdrawLabel) !== o.month) return false;
+    var q = normalizeQuery(o.query || '');
+    if (q && normalizeQuery(r.student).indexOf(q) < 0) return false;
+    return true;
+  }
+  // 終わった物だから隠している行の数（「終わった物も出す」にすれば出る行）
+  function countHiddenDone(rows, o) {
+    var all = {};
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) all[k] = o[k];
+    all.showDone = true;
+    return rows.filter(function (r) { return !listRowVisible(r, o) && listRowVisible(r, all); }).length;
   }
 
   // ================= セット・よく使う教材の編集 =================
@@ -1614,7 +1665,8 @@ var AppLogic = (function () {
     requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState, handedInputHint: handedInputHint,
     applyChanges: applyChanges, mergePend: mergePend, createSaveQueue: createSaveQueue,
     checkSetName: checkSetName, checkCodeList: checkCodeList, replaceSetRows: replaceSetRows, removeSetRows: removeSetRows,
-    moveItem: moveItem, pickCandidates: pickCandidates, SET_MAX_ITEMS: SET_MAX_ITEMS, FAV_MAX: FAV_MAX,
+    moveItem: moveItem, pickCandidates: pickCandidates,
+    isFinishedView: isFinishedView, listRowVisible: listRowVisible, countHiddenDone: countHiddenDone, SET_MAX_ITEMS: SET_MAX_ITEMS, FAV_MAX: FAV_MAX,
     shouldDeferRedraw: shouldDeferRedraw, saveFailText: saveFailText, noteSaveResult: noteSaveResult, isStaleResponse: isStaleResponse
   };
 })();
@@ -2495,28 +2547,12 @@ var AppLogic = (function () {
     var m = /^(\d+)年(\d+)月/.exec(label || '');
     return m ? m[1] + '年' + m[2] + '月' : '';
   }
-  function passFilter(r) {
-    var v = r.view || {};
-    if (r.id === S.openId) return true; // 開いている行は、取り消した直後なども消さない
-    if (S.failed[r.id]) return true;    // 保存できなかった行は、しぼりこみで隠さない
-    // 取り消しは隠す。ただし後始末（METISの請求を消す）がある取り消しは出す
-    if (v.cancelled && !(v.cleanup > 0) && !$('f-cancel').checked) return false;
-    var st = $('f-status').value;
-    var applied = r.status === '申し込む' && !v.cancelled;
-    if (st === 'none' && r.status !== '未回答') return false;
-    if (st === 'new' && !v.isNew) return false;
-    if (st === 'todo' && ['red', 'purple', 'blue', 'pink', 'orange'].indexOf(v.color) < 0) return false;
-    if (st === 'billed' && !(applied && v.unbilled > 0)) return false;
-    if (st === 'ordered' && !(applied && v.unordered > 0)) return false;
-    if (st === 'handed' && !(applied && v.unhanded > 0)) return false;
-    if (st === 'metis' && !(applied && v.metisLeft > 0)) return false;
-    if (st === 'remind' && v.color !== 'orange') return false;
-    var mo = $('f-month').value;
-    if (mo && monthOf(r.withdrawLabel) !== mo) return false;
-    var q = L.normalizeQuery($('f-name').value);
-    if (q && L.normalizeQuery(r.student).indexOf(q) < 0) return false;
-    return true;
+  // いまの絞りこみ（AppLogic.listRowVisible に渡す形）
+  function filterOpts(showDone) {
+    return { status: $('f-status').value, month: $('f-month').value, query: $('f-name').value,
+      showDone: showDone === undefined ? $('f-done').checked : showDone, openId: S.openId, failed: S.failed };
   }
+  function passFilter(r) { return L.listRowVisible(r, filterOpts()); }
   function renderMonthFilter() {
     var sel = $('f-month');
     var cur = sel.value;
@@ -2543,7 +2579,12 @@ var AppLogic = (function () {
     $('list-time').textContent = S.listTime ? S.listTime + ' に読み込みました（3分ごとに自動で読み直します。すぐ見るときは「更新」）' : '';
     var body = $('list-body');
     clear(body);
-    var rows = S.list.filter(passFilter);
+    var opts = filterOpts();
+    var rows = S.list.filter(function (r) { return L.listRowVisible(r, opts); });
+    // 終わった物だから隠している数（ほかの絞りこみには合うもの）
+    var hiddenDone = L.countHiddenDone(S.list, opts);
+    $('list-hidden').textContent = hiddenDone ? '終わった物 ' + hiddenDone + '件を隠しています' : '';
+    $('list-hidden').hidden = !hiddenDone;
     rows.forEach(function (r) {
       var v = r.view || {};
       var open = r.id === S.openId;
@@ -3372,7 +3413,7 @@ var AppLogic = (function () {
   document.addEventListener('compositionend', function () { S.composing = false; setTimeout(flushDeferred, 0); });
   document.addEventListener('click', function () { setTimeout(flushDeferred, 0); });
   document.addEventListener('keyup', function (e) { if (e.key === 'Tab') setTimeout(flushDeferred, 0); });
-  ['f-status', 'f-month', 'f-cancel'].forEach(function (id) { $(id).addEventListener('change', renderList); });
+  ['f-status', 'f-month', 'f-done'].forEach(function (id) { $(id).addEventListener('change', renderList); });
   $('f-name').addEventListener('input', renderList);
 
   // ---- はじめ ----
