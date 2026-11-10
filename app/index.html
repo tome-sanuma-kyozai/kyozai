@@ -206,6 +206,11 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
   .chips button.on { background: #e8f0fe; border-color: #8ab4f8; color: #174ea6; font-weight: bold; }
   .ed-dirty { color: #b3261e; font-weight: bold; font-size: 14px; }
 
+  /* 生徒の入れかえ */
+  .st-steps { margin: 8px 0 12px; padding-left: 1.4em; line-height: 1.8; }
+  #st-paste { width: 100%; font-family: inherit; font-size: 15px; }
+  .st-now { max-height: 480px; overflow-y: auto; }
+
   @media (max-width: 900px) {
     .sets-grid { grid-template-columns: 1fr; }
     main { padding: 16px; }
@@ -229,6 +234,7 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
       <button type="button" id="tab-make" class="tab on">作る</button>
       <button type="button" id="tab-list" class="tab">一覧（新しい <span id="new-count">0</span>）</button>
       <button type="button" id="tab-sets" class="tab">セット・よく使う</button>
+      <button type="button" id="tab-students" class="tab">生徒（<span id="student-count">0</span>人）</button>
     </nav>
     <button type="button" id="refresh" class="btn btn-sm" hidden>更新</button>
     <span class="spacer"></span>
@@ -412,6 +418,32 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
           <p id="sets-msg" class="msg" hidden></p>
         </div>
         <div id="sets-editor" class="sets-right"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== 生徒の入れかえ ===== -->
+  <div id="view-students" hidden>
+    <section class="card">
+      <h2>生徒を入れかえる</h2>
+      <ol class="st-steps">
+        <li>METISで在籍の生徒だけにして、<b>名前と学年の2列</b>を選んでコピー（Ctrl＋C）</li>
+        <li>下の白い枠をクリックして貼る（Ctrl＋V）</li>
+        <li>「入れかえる」を押す（今の生徒は全部、貼った生徒に入れかわります）</li>
+      </ol>
+      <textarea id="st-paste" rows="10" placeholder="ここに貼る（名前と学年の2列だけ。生年月日・住所などは入れない）" spellcheck="false"></textarea>
+      <p id="st-read" class="small muted" style="margin:6px 0 0"></p>
+      <div class="row" style="margin-top:12px">
+        <button type="button" id="st-save" class="btn-main" disabled>入れかえる</button>
+        <button type="button" id="st-clear" class="btn">枠を空にする</button>
+      </div>
+      <p id="st-msg" class="msg" hidden></p>
+    </section>
+    <section class="card">
+      <h2>今の生徒（<span id="st-now-count">0</span>人）</h2>
+      <p id="st-dup" class="warn" hidden></p>
+      <div class="table-wrap st-now">
+        <table class="list"><thead><tr><th>名前</th><th>学年</th></tr></thead><tbody id="st-now"></tbody></table>
       </div>
     </section>
   </div>
@@ -973,6 +1005,54 @@ var AppLogic = (function () {
   }
   // ---- ここまで Logic.gs と同じ ----
 
+  // ---- ここから Logic.gs と同じ（parseStudentPaste・checkStudentRows）----
+  var STUDENT_MAX = 2999;
+  var STUDENT_NAME_MAX = 40;
+  var STUDENT_GRADE_MAX = 20;
+  function parseStudentPaste(text) {
+    var bad = function (msg) { return { ok: false, rows: [], error: msg }; };
+    if (typeof text !== 'string') return bad('badrequest');
+    var lines = text.replace(/\r\n?/g, '\n').split('\n');
+    var rows = [];
+    var first = true;
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === '') continue;
+      var cells = lines[i].split('\t').map(function (s) { return s.trim(); });
+      while (cells.length > 0 && cells[cells.length - 1] === '') cells.pop();
+      var isFirst = first;
+      first = false;
+      if (isFirst && /^(名前|氏名|生徒名)$/.test(cells[0] || '')) continue;
+      var at = (i + 1) + '行目';
+      if (cells.length > 2) return bad(at + 'に3列目があります。名前と学年の2列だけをコピーしてください');
+      if ((cells[0] || '') === '') return bad(at + 'に名前がありません');
+      if (cells.length < 2) return bad(at + 'に学年がありません（' + cells[0] + '）。名前と学年の2列をコピーしてください');
+      rows.push([cells[0], cells[1]]);
+    }
+    if (!rows.length) return bad('生徒が読みとれません。名前と学年の2列をコピーして貼ってください');
+    return checkStudentRows(rows);
+  }
+  function checkStudentRows(rows) {
+    var bad = function (msg) { return { ok: false, rows: [], error: msg }; };
+    if (!Array.isArray(rows)) return bad('badrequest');
+    if (rows.length === 0) return bad('生徒を1人以上入れてください');
+    if (rows.length > STUDENT_MAX) return bad('生徒は' + STUDENT_MAX + '人までです');
+    var out = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!Array.isArray(r) || r.length !== 2 || typeof r[0] !== 'string' || typeof r[1] !== 'string') return bad('badrequest');
+      var name = r[0].trim();
+      var grade = r[1].trim();
+      var at = (i + 1) + '人目';
+      if (name === '' || grade === '') return bad(at + 'の名前か学年が空です');
+      if (name.length > STUDENT_NAME_MAX) return bad(at + 'の名前が長すぎます（' + STUDENT_NAME_MAX + '文字まで）。名前と学年の2列だけをコピーしてください');
+      if (grade.length > STUDENT_GRADE_MAX) return bad(at + 'の学年が長すぎます（' + STUDENT_GRADE_MAX + '文字まで）。名前と学年の2列だけをコピーしてください');
+      if (/^[=+\-@]/.test(name) || /^[=+\-@]/.test(grade)) return bad(at + 'の名前か学年が = + - @ で始まっています');
+      out.push([name, grade]);
+    }
+    return { ok: true, rows: out, error: null };
+  }
+  // ---- ここまで Logic.gs と同じ ----
+
   // 並びの i 番目を d（-1 上・+1 下）へ動かした新しい並び（はしなら同じ並び）
   function moveItem(list, i, d) {
     var j = i + d;
@@ -1021,7 +1101,7 @@ var AppLogic = (function () {
 
     var MSG_NO_CLASS = 'この教室は開けません';
     var MSG_NOT_FOUND = 'この申込は見つかりません';
-    var WRITE_OPS = ['create', 'updateItem', 'bulk', 'batch', 'memo', 'cancel', 'setSave', 'setDelete', 'favSave'];
+    var WRITE_OPS = ['create', 'updateItem', 'bulk', 'batch', 'memo', 'cancel', 'setSave', 'setDelete', 'favSave', 'studentsSave'];
     var STAGES = ['billed', 'ordered', 'handed', 'metis'];
     var MASTER = [
       { code: 'M001', name: '中1 数学 基礎ワーク', price: 1650, target: '中学生' },
@@ -1346,6 +1426,14 @@ var AppLogic = (function () {
         x.c.favs = cl.codes;
         return { ok: true, data: { sets: groupSets_(x.c.setRows), favorites: x.c.favs.slice() } };
       },
+      // Staff.gs の staffStudentsSave_ と同じ
+      studentsSave: function (x) {
+        var chk = checkStudentRows(x.args.rows);
+        if (!chk.ok) return { ok: false, error: chk.error };
+        x.c.students = chk.rows.map(function (r) { return { name: r[0], grade: r[1] }; });
+        return { ok: true, data: { students: x.c.students,
+          duplicates: findDuplicateNames(x.c.students.map(function (s) { return s.name; })) } };
+      },
       // Staff.gs の staffBatch_ と同じ：全部確かめてから書く（1つでもだめなら何も書かない）
       batch: function (x) {
         var a = x.args;
@@ -1664,6 +1752,7 @@ var AppLogic = (function () {
     newClientKey: newClientKey, yen: yen, addOne: addOne, setPicks: setPicks, formatDate: formatDate, createMockApi: createMockApi,
     requestView: requestView, isoDate: isoDate_, parseHandedDate: parseHandedDate, handedInputState: handedInputState, handedInputHint: handedInputHint,
     applyChanges: applyChanges, mergePend: mergePend, createSaveQueue: createSaveQueue,
+    parseStudentPaste: parseStudentPaste, checkStudentRows: checkStudentRows,
     checkSetName: checkSetName, checkCodeList: checkCodeList, replaceSetRows: replaceSetRows, removeSetRows: removeSetRows,
     moveItem: moveItem, pickCandidates: pickCandidates,
     isFinishedView: isFinishedView, listRowVisible: listRowVisible, countHiddenDone: countHiddenDone, SET_MAX_ITEMS: SET_MAX_ITEMS, FAV_MAX: FAV_MAX,
@@ -1816,6 +1905,7 @@ var AppLogic = (function () {
     $('view-make').hidden = !app || S.view !== 'make';
     $('view-list').hidden = !app || S.view !== 'list';
     $('view-sets').hidden = !app || S.view !== 'sets';
+    $('view-students').hidden = !app || S.view !== 'students';
     $('cls-box').hidden = !app;
     $('tabs').hidden = !app;
     $('refresh').hidden = !app;
@@ -1952,6 +2042,7 @@ var AppLogic = (function () {
     S.ed = null;        // 教室が変わったら、セットの編集は閉じる
     S.leaveAsk = null;
     renderSetsView();
+    renderStudentsView();
     S.list = [];
     S.openId = '';
     S.detail = null;
@@ -1981,6 +2072,7 @@ var AppLogic = (function () {
         takeInit(res.data);
         if (!S.sets.some(function (s) { return s.name === S.setName; })) S.setName = NO_SET;
         renderSetsLeft(); // セット・よく使うの左の一覧も新しくする（開いている編集はそのまま）
+        renderStudentsView();
         renderHeader();
         renderStudentOptions();
         renderMonths();
@@ -2056,6 +2148,8 @@ var AppLogic = (function () {
     $('tab-make').className = 'tab' + (S.view === 'make' ? ' on' : '');
     $('tab-list').className = 'tab' + (S.view === 'list' ? ' on' : '');
     $('tab-sets').className = 'tab' + (S.view === 'sets' ? ' on' : '');
+    $('tab-students').className = 'tab' + (S.view === 'students' ? ' on' : '');
+    $('student-count').textContent = String(S.students.length);
     renderWho();
   }
   function setView(v) {
@@ -2066,7 +2160,9 @@ var AppLogic = (function () {
     $('view-make').hidden = v !== 'make';
     $('view-list').hidden = v !== 'list';
     $('view-sets').hidden = v !== 'sets';
+    $('view-students').hidden = v !== 'students';
     if (v === 'sets') renderSetsView();
+    if (v === 'students') renderStudentsView();
     renderHeader();
     if (v === 'list') {
       renderList();
@@ -2127,7 +2223,7 @@ var AppLogic = (function () {
     var dups = Object.keys(S.dupSet);
     var note = $('dup-note');
     note.hidden = dups.length === 0;
-    note.textContent = dups.length ? '生徒一覧に同じ名前が2人います：' + dups.join('、') + '（この名前では作れません。表で片方の名前に印を付けて貼り直してください）' : '';
+    note.textContent = dups.length ? '生徒一覧に同じ名前が2人います：' + dups.join('、') + '（この名前では作れません。上の「生徒」で、片方の名前に印を付けて貼り直してください）' : '';
   }
   // 打っているあいだ（変換中も）は「生徒一覧にいない名前です」を出さない。出すのは欄を離れたとき
   function onStudentInput() {
@@ -3331,7 +3427,70 @@ var AppLogic = (function () {
     });
   }
 
+  // ================= 生徒の入れかえ =================
+  // 貼った枠を読んで、読みとれた人数かまちがいを出す。読めたら「入れかえる」を押せる
+  function readStudentPaste() {
+    var text = $('st-paste').value;
+    if (text.trim() === '') return null;
+    return L.parseStudentPaste(text);
+  }
+  function renderStudentPasteState() {
+    var r = readStudentPaste();
+    var note = $('st-read');
+    if (!r) { note.textContent = ''; note.className = 'small muted'; }
+    else if (r.ok) { note.textContent = r.rows.length + '人を読みとりました。「入れかえる」を押すと、今の' + S.students.length + '人と入れかわります。'; note.className = 'small muted'; }
+    else { note.textContent = r.error; note.className = 'small warn'; }
+    $('st-save').disabled = S.stBusy || !(r && r.ok);
+  }
+  function renderStudentsView() {
+    $('st-now-count').textContent = String(S.students.length);
+    var body = $('st-now');
+    clear(body);
+    if (!S.students.length) {
+      body.appendChild(h('tr', {}, [h('td', { colspan: '2', class: 'empty', text: 'まだ生徒がいません。上の枠に貼って「入れかえる」を押してください。' })]));
+    }
+    S.students.forEach(function (s) {
+      body.appendChild(h('tr', {}, [h('td', { text: s.name }), h('td', { text: s.grade })]));
+    });
+    var dups = Object.keys(S.dupSet);
+    $('st-dup').hidden = dups.length === 0;
+    $('st-dup').textContent = dups.length ? '同じ名前が2人います：' + dups.join('、') + '。この名前では申込を作れません。片方の名前の後ろに印（例：「生徒A（2）」）を付けて貼り直してください。貼り直すときも、同じ子には同じ印を付けます。' : '';
+    renderStudentPasteState();
+  }
+  function saveStudents() {
+    if (S.stBusy) return;
+    var r = readStudentPaste();
+    if (!r || !r.ok) { renderStudentPasteState(); return; }
+    var c = S.cls;
+    S.stBusy = true;
+    say($('st-msg'), '入れかえています…', 'info');
+    renderStudentPasteState();
+    send('studentsSave', { rows: r.rows }, L.newClientKey()).then(function (res) {
+      S.stBusy = false;
+      if (S.cls !== c) return;
+      if (res.ok && res.data) {
+        S.students = res.data.students || [];
+        S.dupSet = {};
+        (res.data.duplicates || []).forEach(function (n) { S.dupSet[n] = true; });
+        $('st-paste').value = '';
+        renderStudentOptions();
+        matchStudent();
+        renderMake();
+        renderHeader();
+        renderStudentsView();
+        say($('st-msg'), S.students.length + '人に入れかえました。「作る」の生徒にもう出ています', 'ok');
+      } else {
+        say($('st-msg'), res.relogin ? 'ログインし直してから、もう一度「入れかえる」を押してください' : jaError(res.error), 'error');
+        renderStudentPasteState();
+      }
+    });
+  }
+
   // ================= つなぐ =================
+  $('tab-students').addEventListener('click', function () { setView('students'); });
+  $('st-paste').addEventListener('input', function () { say($('st-msg'), ''); renderStudentPasteState(); });
+  $('st-save').addEventListener('click', saveStudents);
+  $('st-clear').addEventListener('click', function () { $('st-paste').value = ''; say($('st-msg'), ''); renderStudentPasteState(); $('st-paste').focus(); });
   $('tab-make').addEventListener('click', function () { setView('make'); });
   $('tab-list').addEventListener('click', function () { setView('list'); });
   $('tab-sets').addEventListener('click', function () { setView('sets'); });
