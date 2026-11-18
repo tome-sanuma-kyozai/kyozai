@@ -60,6 +60,10 @@
 <section id="loading" class="card"><p class="lead">読み込んでいます…</p></section>
 <section id="message" class="card" hidden>
   <p class="lead" id="message-text"></p>
+  <div id="message-cls" hidden>
+    <p id="message-cls-name"></p>
+    <p id="message-cls-tel"></p>
+  </div>
   <button id="retry" type="button" hidden onclick="location.reload()">もう一度読み込む</button>
 </section>
 
@@ -121,7 +125,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
   var KIND_REC = 'おすすめ'; // ほか（必須・空）は必須として出す
   var MSG_BAD_LINK = 'このリンクは使えません。教室にお問い合わせください。';
   var MSG_UNAVAILABLE = 'ただいま表示できません。時間をおいて、もう一度お開きください。';
-  var MSG_NETWORK = '通信できませんでした。電波のよいところで、もう一度「送信する」を押してください。';
+  var MSG_NETWORK = '通信できませんでした。電波のよいところで、もう一度下のボタンを押してください。';
+  var MSG_CANCELLED = 'この申込は取り消されました。教室にお問い合わせください。';
 
   // Logic.gs の extractRequestId と同じ規則
   function extractRequestId(raw) {
@@ -175,8 +180,20 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
   }
   function showMessage(text, canRetry) {
     setText($('message-text'), text);
+    $('message-cls').hidden = true;
     $('retry').hidden = !canRetry;
     showOnly('message');
+  }
+  // 教室が取り消した申込：決まった文と、教室の名前・電話だけ（下の住所の欄は出さない）
+  function showCancelled(cls) {
+    setText($('message-text'), MSG_CANCELLED);
+    $('message-cls-name').textContent = (cls && cls.name) || '';
+    $('message-cls-tel').textContent = cls && cls.tel ? '電話 ' + cls.tel : '';
+    $('message-cls').hidden = !cls;
+    $('retry').hidden = true;
+    $('footer').hidden = true;
+    showOnly('message');
+    window.scrollTo(0, 0);
   }
   // サーバーの言葉が日本語の文でなければ（'badrequest' など）、決まった文にする
   function japaneseError(msg) {
@@ -300,6 +317,14 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
       for (var n = 0; n < lists.length; n++) lists[n].className = no ? 'items off' : 'items';
       $('count').textContent = String(count);
       $('total').textContent = yen(total);
+      if (!button.disabled) button.textContent = buttonLabel(count, total);
+    }
+    // 送るボタンの文：押すと何が起きるかを書く（選んだ冊数・合計も）
+    function buttonLabel(count, total) {
+      var d = decision();
+      if (d === NO) return '申し込まないで送る';
+      if (d === YES) return count > 0 ? count + '冊（' + yen(total) + '）を申し込む' : '教材を選んでから申し込む';
+      return '送信する';
     }
     function showError(msg) {
       setText(errorBox, msg);
@@ -307,7 +332,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
     }
     function ready() {
       button.disabled = false;
-      button.textContent = '送信する';
+      update(); // ボタンの文を今の選び方に戻す
     }
     for (var j = 0; j < boxes.length; j++) boxes[j].addEventListener('change', update);
     for (var k = 0; k < radios.length; k++) radios[k].addEventListener('change', update);
@@ -333,6 +358,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
       }, 60000).then(function (res) { // 送信は鍵待ち・書きこみがあるので長めに待つ
         if (res && res.ok) {
           renderReceipt(res.receipt, false);
+        } else if (res && res.cancelled) {
+          showCancelled(res.cls);
         } else if (res && res.receipt) {
           renderReceipt(res.receipt, true);
         } else {
@@ -363,6 +390,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ug
       else showMessage(MSG_UNAVAILABLE, true);
       return;
     }
+    if (res.status === 'cancelled') return showCancelled(res.cls);
     showFooter(res.cls);
     if (res.status === 'open' && res.form) renderForm(res.id || id, res.form);
     else if (res.receipt) renderReceipt(res.receipt, true);
