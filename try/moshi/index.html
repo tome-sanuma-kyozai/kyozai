@@ -15,7 +15,8 @@
       → {ok:true, status:'open', id, guide:{name, targetText, venue, dates:[{key,time,label,short}], datesText,
            feeLabel, withdraw, ret, deadlineLabel, range, timetable, recommendText}, cls:{name, address, tel}}
       → {ok:true, status:'cancelled', cls:{name, tel}} ／ {ok:false, error:'notfound'|'unavailable'}
-    POST API_URL（Content-Type: text/plain）{api:'moshiSubmit', id, name, answer:'受験'|'未定'|'辞退', dateKey, website, clientKey}
+    POST API_URL（Content-Type: text/plain）{api:'moshiSubmit', id, name, answer:'受験'|'未定'|'辞退', dateKey, way, decide, wish, website, clientKey}
+      （未定のときだけ way:'別の日'|'分けて'|'自宅'、decide:'書く'|'教室で相談'、wish:ご希望の日時（書くときだけ 1〜100文字））
       → {ok:true, receipt:{name, answerLabel, appliedAtLabel}} ／ {ok:false, error, cancelled?:true, cls?}
 
   試し（?mock=1）：通信せず、下の localStorage を使う
@@ -34,7 +35,7 @@
           status: 'open' | 'cancelled'
         }
       },
-      subs: [ {id: 案内番号, name: 打った名前（前後の空白を取った物）, answer: '受験'|'未定'|'辞退',
+      subs: [ {id: 案内番号, name: 打った名前（前後の空白を取った物）, answer: '受験'|'未定'|'辞退', way, decide, wish（未定のときだけ。ほかは ''）,
                dateKey: 'YYYY-MM-DD'（受験のときだけ。ほかは ''）, at: 送った時刻（ミリ秒の数）, clientKey} ]   // 古い順に足していく
     }
     この画面は subs に足すだけ（消さない・書きかえない）。guides は読むだけ（書くのは教室長アプリの偽API）。
@@ -66,6 +67,13 @@
   legend { font-weight: bold; margin-bottom: 8px; padding: 0; }
   .field-label { display: block; font-weight: bold; margin-bottom: 6px; }
   input[type=text] { width: 100%; min-height: 48px; font-size: 18px; padding: 12px; border: 1px solid #c9ced6; border-radius: 8px; }
+  /* 日を相談したいときだけ出す「受け方・決め方・ご希望の日時」 */
+  .wish { margin: 4px 0 6px; padding: 12px 0 0; border-top: 1px solid #e3e5e8; }
+  .wish .field-label { margin-top: 6px; }
+  .wish .wish-ex { font-size: 16px; color: #3c4043; margin: 0 0 6px; }
+  button.opt .opt-sub { display: block; font-size: 15px; font-weight: normal; margin-top: 2px; }
+  .wish textarea::placeholder { color: #80868b; }
+  .wish textarea { display: block; width: 100%; min-height: 88px; font: inherit; font-size: 18px; line-height: 1.6; padding: 12px; border: 1px solid #c9ced6; border-radius: 8px; resize: vertical; }
   .error { color: #b3261e; font-weight: bold; margin: 12px 0 0; }
   button { display: block; width: 100%; min-height: 48px; margin-top: 16px; padding: 16px; font-size: 19px; font-weight: bold;
     color: #fff; background: #1a73e8; border: 0; border-radius: 10px; cursor: pointer; }
@@ -124,6 +132,18 @@
     <fieldset>
       <legend>受験について、1つ選んでください</legend>
       <div id="choices"></div>
+      <!-- 「日を相談したい」を選んだときだけ出す（ほかを選び直したら隠して、中身は送らない） -->
+      <div id="wish-box" class="wish" hidden>
+        <p class="field-label">1. ご希望の受け方を選んでください</p>
+        <div id="way-choices"></div>
+        <p class="field-label">2. 日時の決め方を選んでください</p>
+        <div id="decide-choices"></div>
+        <div id="wish-write" hidden>
+          <label class="field-label" for="wish" id="wish-label">ご希望の日時</label>
+          <p class="wish-ex" id="wish-hours"></p>
+          <textarea id="wish" maxlength="100" rows="3"></textarea>
+        </div>
+      </div>
     </fieldset>
     <p id="error" class="error" role="alert" hidden></p>
     <button id="submit" type="submit">送る</button>
@@ -169,6 +189,22 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
   var MSG_NO_NAME = '生徒のお名前を入力してください';
   var MSG_LONG_NAME = 'お名前は40文字までです';
   var MSG_NO_CHOICE = '受験する日か、「日を相談したい」「辞退する」を選んでください';
+  var MSG_NO_WISH = 'ご希望の日時をご記入ください';
+  var MSG_NO_WAY = 'ご希望の受け方を選んでください';
+  var MSG_NO_DECIDE = '日時の決め方を選んでください';
+  // 日を相談したいとき：受け方・決め方（値は Logic.gs の MOSHI_WAYS・MOSHI_DECIDES と同じ）
+  var WAYS = [
+    { v: '別の日', text: '別の日に受けたい', label: 'ご希望の日時', hours: '平日は16時以降、土曜は14時からでお願いします（教室が開いている時間です）。',
+      ex: '例：12月19日（土）14時から、12月の平日16時以降' },
+    { v: '分けて', text: '何日かに分けて受けたい', sub: '例：1日目に英語、2日目に残りの4教科', label: 'ご希望の日時',
+      hours: '平日は16時以降、土曜は14時からでお願いします（教室が開いている時間です）。', ex: '例：12月19日（土）14時から英語・数学、12月22日（火）16時から残りの3教科' },
+    { v: '自宅', text: '自宅で受けたい', sub: '問題をお持ち帰りいただき、答案を教室へお持ちください', label: '問題を取りに来る日・答案を持ってくる日のご希望',
+      hours: '問題の受け取り・答案のお持ちこみも、平日は16時以降、土曜は14時からでお願いします。', ex: '例：12月18日（金）16時以降に取りに行き、12月26日（土）に持っていきます' }
+  ];
+  var DECIDES = [{ v: '書く', text: '希望の日時を書く' }, { v: '教室で相談', text: '教室で本人と相談して決めてよい' }];
+  function wayOf(v) { for (var i = 0; i < WAYS.length; i++) if (WAYS[i].v === v) return WAYS[i]; return null; }
+  function decideText(v) { for (var i = 0; i < DECIDES.length; i++) if (DECIDES[i].v === v) return DECIDES[i].text; return ''; }
+  var MSG_LONG_WISH = 'ご希望の日時は100文字までです';
   var MOCK_KEY = 'moshiMock:v1';
   var MOCK_DEFAULT_ID = 'MTk3m9pq2xrstu';
   var ID_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -409,19 +445,29 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
     if (!(body.answer === EXAM && keys.indexOf(dateKey) >= 0) && body.answer !== UNDECIDED && body.answer !== DECLINE) {
       return later({ ok: false, error: MSG_NO_CHOICE });
     }
-    var sub = { id: body.id, name: name, answer: body.answer, dateKey: dateKey, at: now, clientKey: body.clientKey };
+    var und = body.answer === UNDECIDED;
+    if (und && !wayOf(body.way)) return later({ ok: false, error: MSG_NO_WAY });
+    if (und && !decideText(body.decide)) return later({ ok: false, error: MSG_NO_DECIDE });
+    var wish = und && body.decide === '書く' ? trim(body.wish) : '';
+    if (und && body.decide === '書く' && wish === '') return later({ ok: false, error: MSG_NO_WISH });
+    if (wish.length > 100) return later({ ok: false, error: MSG_LONG_WISH });
+    var sub = { id: body.id, name: name, answer: body.answer, dateKey: dateKey, way: und ? body.way : '', decide: und ? body.decide : '', wish: wish,
+      at: now, clientKey: body.clientKey };
     o.subs.push(sub);
     mockWrite(o);
     return later({ ok: true, receipt: receipt(sub) });
   }
 
   // ===== 控え =====
-  function renderReceipt(r, roundName) {
+  function renderReceipt(r, roundName, extra) {
+    extra = extra || {};
     var box = $('receipt');
     while (box.firstChild) box.removeChild(box.firstChild);
     add(box, 'h2', '受け付けました。ありがとうございました。');
     var ul = add(box, 'ul', null, 'receipt-list');
-    var rows = [['模試', roundName], ['お名前', r.name], ['選んだ内容', r.answerLabel], ['受け付けた日時', r.appliedAtLabel]];
+    var rows = [['模試', roundName], ['お名前', r.name], ['選んだ内容', r.answerLabel],
+      ['ご希望の受け方', extra.way ? wayOf(extra.way).text : ''], ['日時の決め方', decideText(extra.decide)], ['ご希望の日時', extra.wish],
+      ['受け付けた日時', r.appliedAtLabel]];
     for (var i = 0; i < rows.length; i++) {
       if (!rows[i][1]) continue;
       var li = add(ul, 'li');
@@ -486,6 +532,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
       b.setAttribute('aria-pressed', 'false');
       b.addEventListener('click', function () {
         picked = o;
+        // 日を相談したいときだけ「ご希望の日時」の欄を出す（ほかを選び直したら隠して、中身は送らない）
+        wishBox.hidden = o.answer !== UNDECIDED;
         for (var k = 0; k < buttons.length; k++) buttons[k].setAttribute('aria-pressed', k === n ? 'true' : 'false');
         errorBox.hidden = true;
       });
@@ -496,6 +544,40 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
     var nameInput = $('studentName');
     var hp = $('website');
     var errorBox = $('error');
+    var wishBox = $('wish-box');
+    var wishInput = $('wish');
+    var wishWrite = $('wish-write');
+    var way = '', decide = '';
+    // 1つだけ選べる大きいボタンを並べる。sub は小さい説明
+    function choiceButtons(boxEl, list, onPick) {
+      var bs = [];
+      list.forEach(function (o, n) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'opt';
+        b.setAttribute('aria-pressed', 'false');
+        b.appendChild(document.createTextNode(o.text));
+        if (o.sub) { var s = document.createElement('span'); s.className = 'opt-sub'; s.textContent = o.sub; b.appendChild(s); }
+        b.addEventListener('click', function () {
+          for (var k = 0; k < bs.length; k++) bs[k].setAttribute('aria-pressed', k === n ? 'true' : 'false');
+          errorBox.hidden = true;
+          onPick(o.v);
+        });
+        boxEl.appendChild(b);
+        bs.push(b);
+      });
+    }
+    // 書く欄：受け方に合わせて見出し・時間の一言・例を変える。「教室で相談」のときは欄ごと出さない
+    function renderWrite() {
+      wishWrite.hidden = decide !== '書く';
+      var w = wayOf(way) || WAYS[0];
+      $('wish-label').textContent = w.label;
+      setText($('wish-hours'), w.hours);
+      wishInput.placeholder = w.ex;
+    }
+    choiceButtons($('way-choices'), WAYS, function (v) { way = v; renderWrite(); });
+    choiceButtons($('decide-choices'), DECIDES, function (v) { decide = v; renderWrite(); });
+    renderWrite();
     var button = $('submit');
     var clientKey = newClientKey();
     var lastSig = null; // 前に送ろうとした内容。同じ内容の押し直しは同じ clientKey
@@ -517,16 +599,23 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
       if (name === '') return showError(MSG_NO_NAME);
       if (name.length > 40) return showError(MSG_LONG_NAME);
       if (!picked) return showError(MSG_NO_CHOICE);
-      var sig = name + '\u0000' + picked.answer + '\u0000' + picked.dateKey;
+      var und = picked.answer === UNDECIDED;
+      if (und && !way) return showError(MSG_NO_WAY);
+      if (und && !decide) return showError(MSG_NO_DECIDE);
+      var wish = und && decide === '書く' ? trim(wishInput.value) : '';
+      if (und && decide === '書く' && wish === '') { showError(MSG_NO_WISH); wishInput.focus(); return; }
+      if (wish.length > 100) return showError(MSG_LONG_WISH);
+      var sendWay = und ? way : '', sendDecide = und ? decide : '';
+      var sig = [name, picked.answer, picked.dateKey, sendWay, sendDecide, wish].join('\u0000');
       if (lastSig !== null && sig !== lastSig) clientKey = newClientKey();
       lastSig = sig;
 
       button.disabled = true;
       button.textContent = '送っています…';
-      send({ api: 'moshiSubmit', id: id, name: name, answer: picked.answer, dateKey: picked.dateKey, website: hp.value, clientKey: clientKey })
+      send({ api: 'moshiSubmit', id: id, name: name, answer: picked.answer, dateKey: picked.dateKey, way: sendWay, decide: sendDecide, wish: wish, website: hp.value, clientKey: clientKey })
         .then(function (res) {
           if (res && res.ok && res.receipt) {
-            renderReceipt(res.receipt, g.name);
+            renderReceipt(res.receipt, g.name, { way: sendWay, decide: sendDecide, wish: wish });
           } else if (res && res.cancelled) {
             showCancelled(res.cls);
           } else {
