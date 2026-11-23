@@ -57,6 +57,7 @@
   body { word-break: auto-phrase; }
   .round { font-size: 20px; font-weight: bold; margin: 0 0 6px; }
   .summary { font-size: 17px; margin: 0; }
+  .who-note { margin: 0 0 12px; font-weight: bold; color: #174ea6; }
   .summary .line { display: block; margin: 2px 0; }
   /* 日時は「日」「時刻」「（どちらか1日）」のかたまりの切れ目だけで折り返す */
   .nw { display: inline-block; white-space: nowrap; }
@@ -123,6 +124,7 @@
   </section>
 
   <section class="card">
+    <p class="who-note">おうちの方が入力してください。</p>
     <label class="field-label" for="studentName">生徒のお名前（漢字でフルネーム）</label>
     <input id="studentName" type="text" maxlength="40" autocomplete="off">
     <div class="hp" aria-hidden="true">
@@ -406,7 +408,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
         deadlineLabel: dayLabel(dl),
         range: '既習範囲すべて',
         timetable: '14:00 受付\n14:10 英語（50分）\n15:10 数学（50分）\n16:10 社会（50分）\n17:10 国語（50分）\n18:10 理科（50分）\n19:00 自己採点（30分・希望者のみ）',
-        recommendText: '新・みやぎ模試は県内で最も有名な模試で、合否に関して信頼性の高いデータが出ます。特別な理由がない限り、受験を強くお勧めしております。'
+        recommendText: '県内でいちばん信頼される模試です。原則、受験をお願いします。'
       },
       cls: { name: '明光義塾 試し教室', address: '（試しの住所）', tel: '000-0000-0000' },
       status: 'open'
@@ -524,7 +526,8 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
     var box = $('choices');
     var opts = [];
     var dates = g.dates || [];
-    for (var i = 0; i < dates.length; i++) opts.push({ answer: EXAM, dateKey: dates[i].key, text: '受験する ' + (dates[i].label || dayLabel(dates[i].key)), cls: 'opt exam' });
+    // 受験日の横に開始時刻も出す（例「受験する 12月27日（日）14:00〜」。本人 2026-11-23：時刻がないと問い合わせが来る）
+    for (var i = 0; i < dates.length; i++) opts.push({ answer: EXAM, dateKey: dates[i].key, text: '受験する ' + (dates[i].label || dayLabel(dates[i].key)) + (dates[i].time ? ' ' + dates[i].time + '〜' : ''), cls: 'opt exam' });
     opts.push({ answer: UNDECIDED, dateKey: '', text: '日を相談したい', cls: 'opt' });
     opts.push({ answer: DECLINE, dateKey: '', text: '辞退する', cls: 'opt' });
     var picked = null;
