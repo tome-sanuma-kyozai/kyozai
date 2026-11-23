@@ -324,6 +324,26 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
   .mo-ans button.on { background: #1a73e8; color: #fff; font-weight: bold; }
   .mo-check { margin: 4px 0 8px; }
   .mo-cancelled { background: #fafaf7; }
+  /* 模試の一覧（2026-11-23 本人の直し）：数のタイル（押すとその人だけ）と、開かない1人1行 */
+  .mo-tiles { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 6px 0 8px; }
+  .mo-tile { display: inline-flex; flex-direction: column; align-items: flex-start; min-width: 108px; min-height: 64px; padding: 6px 14px;
+    border: 2px solid #c9ced6; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; }
+  .mo-tile:hover { background: #f1f3f4; }
+  .mo-tile .mo-tile-l { font-weight: bold; }
+  .mo-tile .mo-tile-s { font-size: 13px; color: #5f6368; }
+  .mo-tile .mo-tile-n b { font-size: 22px; margin-right: 2px; }
+  .mo-tile.late { border-color: #E24B4A; }
+  .mo-tile.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+  .mo-tile.on .mo-tile-s { color: #e8f0fe; }
+  .mo-list tbody tr.r { cursor: default; }
+  .mo-list tbody tr.r:hover td { filter: none; }
+  .mo-list select { min-height: 44px; }
+  .mo-list td:first-child { white-space: nowrap; }
+  .mo-list select { max-width: 10em; }
+  .mo-list td:first-child b, .mo-grade-s, .mo-list .mo-two { white-space: nowrap; }
+  .mo-grade-s { display: block; font-size: 13px; font-weight: normal; }
+  .mo-ans-cell .mo-by { display: block; margin-left: 0; }
+  .mo-memo-cell input[type=text] { width: 100%; min-width: 80px; min-height: 44px; }
   @media (max-width: 900px) { .mo-grid { grid-template-columns: 1fr; } }
   body.narrow .mo-grid { grid-template-columns: 1fr; }
 
@@ -669,8 +689,8 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
 </main>
 
 <!-- 模試の計算（Logic.gs の写し）と画面。偽API（moshi-mock.js）は ?mock=1 のときだけ下の ui が読む -->
-<script src="moshi-logic.js?v=20261121"></script>
-<script src="moshi.js?v=20261121"></script>
+<script src="moshi-logic.js?v=20261123"></script>
+<script src="moshi.js?v=20261123"></script>
 
 <script id="logic">
 // 画面の計算（DOM を使わない）。Logic.gs の祝日・引き落とし日の計算をそのまま写したものと、お試し（?mock=1）の偽の API
@@ -2020,7 +2040,7 @@ var AppLogic = (function () {
             storage: store, isHoliday: L.isJapaneseHoliday }) : null);
         };
         var s = document.createElement('script');
-        s.src = 'moshi-mock.js?v=20261121';
+        s.src = 'moshi-mock.js?v=20261123';
         s.onload = done;
         s.onerror = done;
         document.head.appendChild(s);
