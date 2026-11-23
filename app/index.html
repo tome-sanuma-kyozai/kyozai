@@ -153,6 +153,8 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
   .c-orange { --bd: #EF9F27; --bg: #FAEEDA; --fg: #633806; --tag: #412402; }
   .c-none { --bd: #D3D1C7; --bg: #fff; --fg: #2C2C2A; --tag: #444441; }
   .c-gray { --bd: #B4B2A9; --bg: #F1EFE8; --fg: #5F5E5A; --tag: #2C2C2A; }
+  /* 模試の「確かめて」（依頼-009。足した色はこの黄色だけ） */
+  .c-yellow { --bd: #E0B000; --bg: #FFF5C7; --fg: #5C4400; --tag: #3D2E00; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 10px 0 0; font-size: 15px; color: #3c4043; align-items: center; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend .arw { color: #80868b; }
@@ -271,7 +273,80 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
   body.look-strong .c-orange { --bd: #D9820B; --bg: #F8DDB3; --fg: #3D2203; }
   body.look-strong .c-none { --bd: #8F8D84; --fg: #000; }
   body.look-strong .c-gray { --bd: #8F8D84; --bg: #E4E1D8; --fg: #2C2C2A; }
+  body.look-strong .c-yellow { --bd: #B88A00; --bg: #FBE38A; --fg: #2E2200; }
   body.look-strong .list tbody tr.r td { border-width: 4px; }
+
+  /* 教材｜模試の切り替え（上の帯）と、模試の画面（site/app/moshi.js が描く） */
+  .seg.area button { font-weight: bold; padding: 8px 16px; }
+  .seg.area button.on { background: #1a73e8; color: #fff; }
+  .mo-lab { display: flex; flex-direction: column; gap: 4px; font-weight: bold; }
+  .mo-lab-t { font-weight: bold; }
+  .mo-field { margin: 0 0 14px; }
+  .mo-field select, .mo-field input[type=text] { min-height: 44px; font-weight: normal; }
+  .mo-wide { width: 480px; max-width: 100%; }
+  .mo-fee { width: 160px; }
+  .mo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; }
+  .mo-checks { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 4px 0 8px; }
+  .mo-pick { padding: 0 14px; border: 1px solid #c9ced6; border-radius: 999px; background: #fff; font-weight: bold; }
+  .mo-pick.on { background: #e8f0fe; border-color: #8ab4f8; color: #174ea6; }
+  .mo-date { margin: 0 0 8px; }
+  .mo-date select { min-height: 44px; }
+  .mo-text { font-size: 15px; background: #f8f9fa; }
+  .mo-made { margin-top: 14px; }
+  .mo-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mo-sub { margin: 6px 0 4px; color: #3c4043; }
+  .mo-late { color: #A32D2D; }
+  .mo-counts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 4px 0 6px; }
+  .mo-big { font-size: 20px; }
+  .mo-grade { font-weight: bold; color: #3c4043; }
+  .mo-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 4px; }
+  .mo-tag { display: inline-flex; align-items: center; min-height: 32px; padding: 2px 14px; border-radius: 999px; font-weight: bold;
+    border: 3px solid var(--bd); background: var(--bg); color: var(--fg); }
+  .mo-n { display: inline-block; min-width: 22px; padding: 0 6px; border-radius: 999px; background: #E0B000; color: #3D2E00; }
+  .tab.on .mo-n { background: #FFF5C7; }
+  .mo-two { display: inline-block; margin-left: 6px; padding: 0 8px; font-size: 13px; font-weight: bold; color: #fff; background: #5F5E5A; border-radius: 999px; }
+  .mo-by { font-size: 13px; margin-left: 4px; }
+  .mo-memo { display: block; font-size: 14px; font-weight: normal; }
+  .mo-list th.hit-head { text-align: center; width: 72px; }
+  .mo-unmatched { margin: 10px 0 4px; padding: 10px 16px; border: 3px solid var(--bd); background: var(--bg); color: var(--fg); border-radius: 10px; }
+  .mo-unmatched h3 { margin: 0 0 2px; }
+  .mo-unmatched ul { list-style: none; margin: 6px 0 0; padding: 0; }
+  .mo-unmatched li { padding: 6px 0; border-top: 1px solid rgba(0,0,0,.12); }
+  .mo-picker { margin: 8px 0 4px; padding: 10px 14px; background: #fff; border-radius: 8px; color: #1f2328; }
+  .mo-picker h3 { margin: 8px 0 4px; font-size: 15px; }
+  .mo-picker input[type=search] { width: 260px; max-width: 100%; min-height: 44px; }
+  .mo-results { margin-top: 6px; }
+  .mo-footbox { margin-top: 12px; }
+  .mo-foot .btn, .mo-footbox .btn { min-height: 44px; }
+  a.btn { text-decoration: none; color: inherit; display: inline-flex; align-items: center; }
+  .mo-add, .mo-again { margin-top: 10px; }
+  .mo-add select { min-height: 44px; }
+  .mo-ans button.on { background: #1a73e8; color: #fff; font-weight: bold; }
+  .mo-check { margin: 4px 0 8px; }
+  .mo-cancelled { background: #fafaf7; }
+  /* 模試の一覧（2026-11-23 本人の直し）：数のタイル（押すとその人だけ）と、開かない1人1行 */
+  .mo-tiles { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 6px 0 8px; }
+  .mo-tile { display: inline-flex; flex-direction: column; align-items: flex-start; min-width: 108px; min-height: 64px; padding: 6px 14px;
+    border: 2px solid #c9ced6; border-radius: 10px; background: #fff; cursor: pointer; text-align: left; }
+  .mo-tile:hover { background: #f1f3f4; }
+  .mo-tile .mo-tile-l { font-weight: bold; }
+  .mo-tile .mo-tile-s { font-size: 13px; color: #5f6368; }
+  .mo-tile .mo-tile-n b { font-size: 22px; margin-right: 2px; }
+  .mo-tile.late { border-color: #E24B4A; }
+  .mo-tile.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+  .mo-tile.on .mo-tile-s { color: #e8f0fe; }
+  .mo-list tbody tr.r { cursor: default; }
+  .mo-list tbody tr.r:hover td { filter: none; }
+  .mo-list select { min-height: 44px; }
+  .mo-list td:first-child { white-space: nowrap; }
+  .mo-list select { max-width: 10em; }
+  .mo-list td:first-child b, .mo-grade-s, .mo-list .mo-two { white-space: nowrap; }
+  .mo-grade-s { display: block; font-size: 13px; font-weight: normal; }
+  .mo-ans-cell .mo-by { display: block; margin-left: 0; }
+  .mo-wish { display: block; font-size: 13px; color: #0C447C; max-width: 16em; white-space: normal; }
+  .mo-memo-cell input[type=text] { width: 100%; min-width: 80px; min-height: 44px; }
+  @media (max-width: 900px) { .mo-grid { grid-template-columns: 1fr; } }
+  body.narrow .mo-grid { grid-template-columns: 1fr; }
 
   /* 生徒の入れかえ */
   .st-steps { margin: 8px 0 12px; padding-left: 1.4em; line-height: 1.8; }
@@ -302,11 +377,15 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
 <body>
 <header>
   <div class="top-in">
-    <div class="brand">教材申込<span id="mock-badge" class="badge-mock" hidden>お試し表示（架空のデータ）</span></div>
+    <div class="brand"><span id="brand-text">教材申込</span><span id="mock-badge" class="badge-mock" hidden>お試し表示（架空のデータ）</span></div>
     <div id="cls-box" class="cls" hidden>
       <span id="cls-name"></span>
       <select id="cls-switch" aria-label="教室を切り替える" hidden></select>
     </div>
+    <div id="area-seg" class="seg area" role="group" aria-label="教材か模試か" hidden>
+      <button type="button" id="area-kyozai" aria-pressed="true">教材</button><button type="button" id="area-moshi" aria-pressed="false">模試</button>
+    </div>
+    <nav id="moshi-tabs" class="tabs" aria-label="模試" hidden></nav>
     <nav id="tabs" class="tabs" hidden>
       <button type="button" id="tab-make" class="tab on">作る</button>
       <button type="button" id="tab-list" class="tab">一覧（新しい <span id="new-count">0</span>）</button>
@@ -605,7 +684,14 @@ var CLIENT_ID = '1004593844022-r0nsps3pqd22ma8macpksg1anhn0hna4.apps.googleuserc
       <p id="list-empty" class="empty" hidden></p>
     </section>
   </div>
+
+  <!-- ===== 模試（依頼-009。中身は site/app/moshi.js が描く） ===== -->
+  <div id="view-moshi" hidden></div>
 </main>
+
+<!-- 模試の計算（Logic.gs の写し）と画面。偽API（moshi-mock.js）は ?mock=1 のときだけ下の ui が読む -->
+<script src="moshi-logic.js?v=20261123p"></script>
+<script src="moshi.js?v=20261123p"></script>
 
 <script id="logic">
 // 画面の計算（DOM を使わない）。Logic.gs の祝日・引き落とし日の計算をそのまま写したものと、お試し（?mock=1）の偽の API
@@ -1299,7 +1385,10 @@ var AppLogic = (function () {
       A: { code: 'A', name: '架空教室', reqs: [], items: [], nextReq: 2, nextItem: 2, students: [
         { name: '生徒A', grade: '中学1年' }, { name: '生徒B', grade: '中学2年' }, { name: '生徒C', grade: '中学3年' },
         { name: '生徒D', grade: '高校1年' }, { name: '生徒E', grade: '小学6年' }, { name: '生徒F', grade: '中学2年' },
-        { name: '生徒G', grade: '中学1年' }, { name: '生徒G', grade: '中学1年' }
+        { name: '生徒G', grade: '高校1年' }, { name: '生徒G', grade: '高校1年' }, // 同じ名前の2人（模試の対象の学年にならないよう高校1年）
+        // 模試の偽API（moshi-mock.js）用に足した架空の生徒
+        { name: '生徒J', grade: '中学3年' }, { name: '生徒K', grade: '中学3年' }, { name: '生徒L', grade: '中学3年' },
+        { name: '生徒M', grade: '中学1年' }, { name: '生徒N', grade: '中学2年' }
       ] },
       B: { code: 'B', name: '架空教室B', reqs: [], items: [], nextReq: 2, nextItem: 2, students: [
         { name: '生徒H', grade: '中学1年' }, { name: '生徒I', grade: '高校2年' }
@@ -1702,7 +1791,10 @@ var AppLogic = (function () {
       if (ck && res.ok === true && !(res.data && res.data.needConfirm)) cache[ck] = out;
       return JSON.parse(out);
     }
-    return { handle: handle, today: T };
+    // 模試の偽API（moshi-mock.js）に渡す：その教室の今の生徒一覧（使えない教室は null）と教室名
+    function studentsOf(cls) { return me.classes.indexOf(cls) >= 0 && classes[cls] ? classes[cls].students : null; }
+    function classNameOf(cls) { return classes[cls] ? classes[cls].name : ''; }
+    return { handle: handle, today: T, studentsOf: studentsOf, className: classNameOf };
   }
 
   // ---- お試し用に Logic.gs・Sheets.gs から写した部品 ----
@@ -1937,6 +2029,32 @@ var AppLogic = (function () {
   };
   var mock = MOCK ? L.createMockApi(new Date()) : null;
   if (MOCK) window.__mockApi = mock; // お試しのときだけ：ほかの人が表を変えた形を作って「更新」を試すため（本物では作らない）
+  // 模試の偽API：?mock=1 のときだけ moshi-mock.js を読む（本物のときは読まない）。保護者の偽の画面と localStorage でつながる
+  var moshiMockP = null;
+  function moshiMock() {
+    if (!moshiMockP) {
+      moshiMockP = new Promise(function (resolve) {
+        var done = function () {
+          var store = null;
+          try { store = window.localStorage; store.getItem('moshiMock:v1'); } catch (e) { store = null; }
+          resolve(window.MoshiMock ? window.MoshiMock.create({ studentsOf: mock.studentsOf, className: mock.className, today: mock.today,
+            storage: store, isHoliday: L.isJapaneseHoliday }) : null);
+        };
+        var s = document.createElement('script');
+        s.src = 'moshi-mock.js?v=20261123p';
+        s.onload = done;
+        s.onerror = done;
+        document.head.appendChild(s);
+      });
+    }
+    return moshiMockP;
+  }
+  if (MOCK) moshiMock();
+  // 教材｜模試：どちらを開いているか（このブラウザに覚える。読めなければ教材）
+  var AREA_KEY = 'app:area';
+  S.area = 'kyozai';
+  try { if (localStorage.getItem(AREA_KEY) === 'moshi') S.area = 'moshi'; } catch (e) { /* 覚えられないときは教材 */ }
+  if (!window.MoshiApp) S.area = 'kyozai'; // 模試の画面が読めなかったときは教材だけ
   // 中身の印（①②④・渡した日・消した・メモ・まとめて）：画面はすぐ変え、ためて約0.8秒後に1回で保存する
   S.base = {};     // 申込番号 → サーバーから来た最後の中身（open の形）
   S.failed = {};   // 申込番号 → {text}：保存できなかった申込（閉じるか、次に保存できるまで出しておく）
@@ -1970,6 +2088,16 @@ var AppLogic = (function () {
       redisplay(id);
     }
   });
+  // 模試の画面（moshi.js）に渡す部品（今の関数をそのまま渡す）。足した保存のならびも、閉じる前・教室を変える前・ログインし直したあとに送る
+  var extraQueues = [];
+  var classFns = [];
+  function eachQueue(fn) { extraQueues.forEach(function (q) { fn(q); }); }
+  window.StaffShell = {
+    isMock: MOCK, send: send, h: h, clear: clear, $: $, newClientKey: L.newClientKey, createSaveQueue: L.createSaveQueue,
+    renderSaveState: renderSaveState, addQueue: function (q) { extraQueues.push(q); }, onClass: function (fn) { classFns.push(fn); },
+    cls: function () { return S.cls; }, className: function () { return S.clsNames[S.cls] || ''; }, students: function () { return S.students; },
+    isJapaneseHoliday: L.isJapaneseHoliday, copyText: copyText
+  };
 
   // ---- 小さな部品 ----
   function $(id) { return document.getElementById(id); }
@@ -2042,7 +2170,16 @@ var AppLogic = (function () {
   }
   // お試し：少し待ってから偽の API が答える
   function mockSend(body) {
-    var wait = body.op === 'create' ? 700 : 250 + Math.floor(Math.random() * 300);
+    var wait = body.op === 'create' || body.op === 'moshiCreate' ? 700 : 250 + Math.floor(Math.random() * 300);
+    if (/^moshi/.test(String(body.op))) {
+      // 模試の op は模試の偽API へ（教室は本物と同じく、空ならその人の教室）
+      if (!body.cls) body.cls = S.cls;
+      return moshiMock().then(function (mm) {
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(mm ? mm.handle(JSON.parse(JSON.stringify(body))) : { ok: false, error: MSG_FAIL }); }, wait);
+        });
+      });
+    }
     return new Promise(function (resolve) {
       setTimeout(function () { resolve(mock.handle(JSON.parse(JSON.stringify(body)))); }, wait);
     });
@@ -2052,13 +2189,38 @@ var AppLogic = (function () {
   function showPane(name) {
     ['loading', 'setup', 'login', 'error'].forEach(function (p) { $('pane-' + p).hidden = p !== name; });
     var app = name === 'app';
-    $('view-make').hidden = !app || S.view !== 'make';
-    $('view-list').hidden = !app || S.view !== 'list';
-    $('view-sets').hidden = !app || S.view !== 'sets';
-    $('view-students').hidden = !app || S.view !== 'students';
+    var ky = S.area !== 'moshi'; // 模試を開いているときは、教材の枠とタブを隠す
+    $('view-make').hidden = !app || !ky || S.view !== 'make';
+    $('view-list').hidden = !app || !ky || S.view !== 'list';
+    $('view-sets').hidden = !app || !ky || S.view !== 'sets';
+    $('view-students').hidden = !app || !ky || S.view !== 'students';
+    $('view-moshi').hidden = !app || ky;
     $('cls-box').hidden = !app;
-    $('tabs').hidden = !app;
+    $('tabs').hidden = !app || !ky;
+    $('moshi-tabs').hidden = !app || ky;
+    $('area-seg').hidden = !app || !window.MoshiApp;
     $('refresh').hidden = !app;
+    if (app && !ky) {
+      try { window.MoshiApp.show(); } catch (e) { console.error(e); } // 模試の画面がこわれても、教材の画面は止めない
+    }
+  }
+  // 教材｜模試の切り替え。ためた保存は送ってから移る（待たない）
+  function setArea(a) {
+    if (a === S.area || (a === 'moshi' && !window.MoshiApp)) return;
+    // セットの編集で保存していない変更があれば、移る前に確かめる
+    if (S.area === 'kyozai' && S.view === 'sets' && !guardLeave(function () { setArea(a); })) return;
+    Q.flushNow();
+    eachQueue(function (q) { q.flushNow(); });
+    if (a === 'kyozai' && window.MoshiApp) window.MoshiApp.hide();
+    S.area = a;
+    try { localStorage.setItem(AREA_KEY, a); } catch (e) { /* 覚えられなくても今は切り替わる */ }
+    $('refresh-diff').hidden = true;
+    showPane('app');
+    renderHeader();
+    if (a === 'kyozai') {
+      if (S.view === 'sets') renderSetsView();
+      if (S.view === 'list' && S.loaded) refreshList(true); // 模試を見ている間に変わったかもしれないので読み直す
+    }
   }
   function showError(text) {
     $('error-text').textContent = text;
@@ -2124,6 +2286,8 @@ var AppLogic = (function () {
     if (S.loaded) {
       $('banner').hidden = true;
       Q.resume(); // ログイン切れで止まっていた保存を送る
+      eachQueue(function (q) { q.resume(); });
+      if (S.area === 'moshi' && window.MoshiApp) window.MoshiApp.refresh(true);
       refreshList(true);
       if (S.view === 'make') say($('create-msg'), 'ログインしました。続けて操作できます（「作る」はもう一度押してください）', 'ok');
       return;
@@ -2205,6 +2369,7 @@ var AppLogic = (function () {
     renderSets();
     renderMake();
     renderList();
+    classFns.forEach(function (fn) { fn(S.cls); }); // 模試も、この教室で読み直す
   }
   // 「更新」：init と list を読み直す。作りかけの入力は残す（生徒一覧・セットなどだけ差しかえる）
   function refreshAll() {
@@ -2314,6 +2479,13 @@ var AppLogic = (function () {
     $('tab-sets').className = 'tab' + (S.view === 'sets' ? ' on' : '');
     $('tab-students').className = 'tab' + (S.view === 'students' ? ' on' : '');
     $('student-count').textContent = String(S.students.length);
+    var moshiOn = S.area === 'moshi';
+    $('area-kyozai').className = moshiOn ? '' : 'on';
+    $('area-kyozai').setAttribute('aria-pressed', moshiOn ? 'false' : 'true');
+    $('area-moshi').className = moshiOn ? 'on' : '';
+    $('area-moshi').setAttribute('aria-pressed', moshiOn ? 'true' : 'false');
+    $('brand-text').textContent = moshiOn ? '模試の案内' : '教材申込';
+    document.title = (moshiOn ? '模試の案内' : '教材申込') + '（教室長）';
     renderWho();
     renderTodoChips();
   }
@@ -2373,7 +2545,9 @@ var AppLogic = (function () {
   // 一覧の自動の読み直し：3分ごと（ページが見えていて、中身で文字・日付を打っていないとき）と、ページがまた見えたとき
   var AUTO_LIST_MS = 3 * 60 * 1000;
   function autoRefreshList() {
-    if (!S.loaded || S.refreshing || document.visibilityState !== 'visible' || typingInDetail()) return;
+    if (!S.loaded || S.refreshing || document.visibilityState !== 'visible') return;
+    if (S.area === 'moshi' && window.MoshiApp) { window.MoshiApp.refresh(true); return; } // 模試を見ているときは模試の一覧を読み直す
+    if (typingInDetail()) return;
     refreshList(true);
   }
 
@@ -3076,7 +3250,8 @@ var AppLogic = (function () {
     el.title = state === 'saving' || state === 'relogin' ? '保存が終わるまで、このページを閉じないでください' : '';
     el.hidden = !text;
     if (savedTimer) { clearTimeout(savedTimer); savedTimer = null; }
-    if (state === 'saved') savedTimer = setTimeout(function () { if (Q.state() === 'saved') el.hidden = true; }, 2500);
+    // 2.5秒たってもまだ「保存しました」のままなら消す（模試の保存のならびも同じ印を使う）
+    if (state === 'saved') savedTimer = setTimeout(function () { if (el.className === 'save-state saved') el.hidden = true; }, 2500);
   }
   // 中の印を1つ変えた：すぐ画面に出し、保存はためる
   function queueItem(row, patch) {
@@ -3778,7 +3953,12 @@ var AppLogic = (function () {
     renderSetsView();
   });
   $('leave-no').addEventListener('click', function () { S.leaveAsk = null; $('leave-ask').hidden = true; });
-  $('refresh').addEventListener('click', refreshAll);
+  $('refresh').addEventListener('click', function () {
+    if (S.area === 'moshi' && window.MoshiApp) window.MoshiApp.refresh(false); // 模試を開いているときは模試の一覧を読み直す
+    else refreshAll();
+  });
+  $('area-kyozai').addEventListener('click', function () { setArea('kyozai'); });
+  $('area-moshi').addEventListener('click', function () { setArea('moshi'); });
   $('cls-switch').addEventListener('change', function (e) {
     var code = e.target.value;
     if (code === S.cls) return;
@@ -3790,6 +3970,7 @@ var AppLogic = (function () {
       return;
     }
     Q.flushNow(); // ためた保存は、ためたときの教室に送る
+    eachQueue(function (q) { q.flushNow(); });
     S.openId = '';
     S.detail = null;
     loadClass(code);
@@ -3826,16 +4007,21 @@ var AppLogic = (function () {
   // ページを離れる・隠れる前に、ためた保存を送る（keepalive で届くようにしている）
   // まだ保存していない（送っている・ためている・ログイン待ち）ときは、離れる前にブラウザの確認を出す（これがいちばん確か）
   window.addEventListener('beforeunload', function (e) {
-    if (!Q.hasWork() && !edDirty()) return undefined;
+    var extraWork = extraQueues.some(function (q) { return q.hasWork(); });
+    if (!Q.hasWork() && !extraWork && !edDirty()) return undefined;
     Q.flushNow();
+    eachQueue(function (q) { q.flushNow(); });
     e.preventDefault();
     e.returnValue = '';
     return '';
   });
   // 本当に閉じるときは、送っている分の答えを待たずに、ためた分も送ってみる
-  window.addEventListener('pagehide', function () { Q.flushNow(); Q.emergencyFlush(); });
+  window.addEventListener('pagehide', function () {
+    Q.flushNow(); Q.emergencyFlush();
+    eachQueue(function (q) { q.flushNow(); q.emergencyFlush(); });
+  });
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'hidden') Q.flushNow();
+    if (document.visibilityState === 'hidden') { Q.flushNow(); eachQueue(function (q) { q.flushNow(); }); }
     else autoRefreshList(); // また見えたら一覧を読み直す
   });
   setInterval(autoRefreshList, AUTO_LIST_MS);
@@ -3931,6 +4117,7 @@ var AppLogic = (function () {
   $('f-name').addEventListener('input', renderList);
 
   // ---- はじめ ----
+  if (window.MoshiApp) window.MoshiApp.mount($('view-moshi'), $('moshi-tabs'));
   renderHeader();
   if (MOCK) {
     S.token = 'mock';
