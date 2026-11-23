@@ -56,6 +56,12 @@
   body { word-break: auto-phrase; }
   .round { font-size: 20px; font-weight: bold; margin: 0 0 6px; }
   .summary { font-size: 17px; margin: 0; }
+  .summary .line { display: block; margin: 2px 0; }
+  /* 日時は「日」「時刻」「（どちらか1日）」のかたまりの切れ目だけで折り返す */
+  .nw { display: inline-block; white-space: nowrap; }
+  /* たたんだ欄の最後の「すすめの一文」：時間割と分けて、1文ずつ自然に折り返す */
+  .detail .note { margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid #e3e5e8; }
+  .detail .note .sent { display: block; margin-bottom: 4px; }
   fieldset { border: 0; margin: 16px 0 0; padding: 0; }
   legend { font-weight: bold; margin-bottom: 8px; padding: 0; }
   .field-label { display: block; font-weight: bold; margin-bottom: 6px; }
@@ -188,6 +194,23 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
       if (!parts[i]) continue;
       var s = document.createElement('span');
       s.className = 's';
+      s.textContent = parts[i];
+      el.appendChild(s);
+    }
+  }
+  // 日時の文（例「12月19日（土）・12月26日（土）14:00〜（どちらか1日）」）を、かたまりごとの折り返さない箱にして入れる
+  // 切れ目：「・」のあと／日付の「）」と時刻のあいだ／「（どちらか1日）」「（いずれか1日）」の前
+  function setDates(el, text) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var parts = String(text || '')
+      .replace(/・/g, '・\u0000')
+      .replace(/）(\d{1,2}:\d{2})/g, '）\u0000$1')
+      .replace(/（(どちらか|いずれか)1日）/g, '\u0000（$11日）')
+      .split('\u0000');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var s = document.createElement('span');
+      s.className = 'nw';
       s.textContent = parts[i];
       el.appendChild(s);
     }
@@ -418,9 +441,16 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
   function renderForm(id, g, send) {
     $('round').textContent = g.name || '';
     var sum = $('summary');
-    var parts = [g.targetText, g.datesText, g.venue ? '会場 ' + g.venue : '', g.feeLabel ? '受験料 ' + g.feeLabel : '', g.deadlineLabel ? '申込締切 ' + g.deadlineLabel : ''];
+    // 1行目：対象、2行目：日時（かたまりの切れ目だけで折り返す）、3行目：会場／受験料／申込締切
+    while (sum.firstChild) sum.removeChild(sum.firstChild);
+    if (g.targetText) add(sum, 'span', g.targetText, 'line');
+    if (g.datesText) setDates(add(sum, 'span', null, 'line'), g.datesText);
+    var parts = [g.venue ? '会場 ' + g.venue : '', g.feeLabel ? '受験料 ' + g.feeLabel : '', g.deadlineLabel ? '申込締切 ' + g.deadlineLabel : ''];
     parts = parts.filter(function (x) { return !!x; });
-    for (var p = 0; p < parts.length; p++) add(sum, 'span', parts[p] + (p < parts.length - 1 ? '／' : ''), 's');
+    if (parts.length) {
+      var rest = add(sum, 'span', null, 'line');
+      for (var p = 0; p < parts.length; p++) add(rest, 'span', parts[p] + (p < parts.length - 1 ? '／' : ''), 's');
+    }
 
     // 下にたたむ細かい所
     var det = $('detail');
@@ -428,13 +458,20 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
       ['会場', g.venue], ['日時', g.datesText], ['受験料', g.feeLabel ? g.feeLabel + '（税込）' : ''],
       ['引き落とし', g.withdraw ? g.withdraw + 'に、ご登録の口座から引き落としいたします。' : ''],
       ['データ集計・本人返却', g.ret ? g.ret + '予定' : ''],
-      ['範囲', g.range], ['時間割', g.timetable], ['', g.recommendText]
+      ['範囲', g.range], ['時間割', g.timetable]
     ];
     for (var d = 0; d < items.length; d++) {
       if (!items[d][1]) continue;
-      if (items[d][0]) add(det, 'h3', items[d][0]);
+      add(det, 'h3', items[d][0]);
       if (items[d][0] === '時間割' || items[d][0] === '範囲') add(det, 'div', items[d][1], 'pre');
+      else if (items[d][0] === '日時') setDates(add(det, 'p', null), items[d][1]);
       else add(det, 'p', items[d][1]);
+    }
+    // すすめの一文：時間割と線で分け、1文ずつ置く（「、」では切らず、文の中は自然に折り返す）
+    if (g.recommendText) {
+      var note = add(det, 'div', null, 'note');
+      var sents = String(g.recommendText).replace(/。/g, '。\u0000').split('\u0000');
+      for (var r = 0; r < sents.length; r++) if (trim(sents[r])) add(note, 'span', trim(sents[r]), 'sent');
     }
 
     // 選ぶボタン（受験日ごと＋日を相談したい＋辞退する）。1つだけ選べる
