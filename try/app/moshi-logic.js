@@ -216,8 +216,20 @@ function moshiMonthOptions_(todayKey, n, suffix) {
 
 var MOSHI_ANSWERS = ['受験', '未定', '辞退'];
 var MOSHI_RECOMMEND_KEYS = ['強くお勧め', 'ご検討の上'];
+// 日を相談したいとき：ご希望の受け方・日時の決め方・ご希望の日時（「書く」のときだけ）
+var MOSHI_WAYS = ['別の日', '分けて', '自宅'];
+var MOSHI_DECIDES = ['書く', '教室で相談'];
+var MOSHI_WISH_MAX = 100;
 
-// 保護者の申込を確かめる。p {name, answer, dateKey}、dateKeys はその案内の受験日。{ok, error, value}
+// 教室長の一覧に出す1行：「別の日／希望：12月20日（日）の午後」「分けて受ける／教室で本人と相談」
+function moshiWishLine_(way, decide, wish) {
+  var w = way === '別の日' ? '別の日' : way === '分けて' ? '分けて受ける' : way === '自宅' ? '自宅で受ける' : '';
+  var d = decide === '書く' ? (wish ? '希望：' + wish : '') : decide === '教室で相談' ? '教室で本人と相談' : '';
+  return [w, d].filter(function (x) { return x !== ''; }).join('／');
+}
+
+// 保護者の申込を確かめる。p {name, answer, dateKey, way, decide, wish}、dateKeys はその案内の受験日。{ok, error, value}
+// （value の way・decide・wish は未定のときだけ。ほかは ''）
 function checkMoshiSubmit_(p, dateKeys) {
   var bad = function (msg) { return { ok: false, error: msg, value: null }; };
   p = p && typeof p === 'object' ? p : {};
@@ -233,7 +245,21 @@ function checkMoshiSubmit_(p, dateKeys) {
   } else if (answer !== '未定' && answer !== '辞退') {
     return bad(pick);
   }
-  return { ok: true, error: null, value: { name: name, answer: answer, dateKey: dateKey } };
+  // 日を相談したいときだけ、受け方（way）・日時の決め方（decide）・ご希望の日時（wish。「書く」のときだけ 1〜100文字）を受け取る。
+  // ほかの答えでは捨てる
+  var way = '', decide = '', wish = '';
+  if (answer === '未定') {
+    way = p.way;
+    if (MOSHI_WAYS.indexOf(way) < 0) return bad('ご希望の受け方を選んでください');
+    decide = p.decide;
+    if (MOSHI_DECIDES.indexOf(decide) < 0) return bad('日時の決め方を選んでください');
+    if (decide === '書く') {
+      wish = typeof p.wish === 'string' ? p.wish.replace(/^[\s　]+|[\s　]+$/g, '') : '';
+      if (wish === '') return bad('ご希望の日時をご記入ください');
+      if (wish.length > MOSHI_WISH_MAX) return bad('ご希望の日時は100文字までです');
+    }
+  }
+  return { ok: true, error: null, value: { name: name, answer: answer, dateKey: dateKey, way: way, decide: decide, wish: wish } };
 }
 
 // 1人の子の申込の並び（保護者・教室長）から今の状態を決める。

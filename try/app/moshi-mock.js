@@ -114,15 +114,20 @@
     function addSub(c, s) {
       var at = isDate(s.at) ? s.at : new Date();
       var sub = { row: nextRow++, id: s.id, typed: s.typed, matched: s.matched, how: s.how, answer: s.answer,
-        dateKey: s.answer === '受験' ? s.dateKey : '', at: at, atKey: moshiDateKey_(at), who: s.who };
+        dateKey: s.answer === '受験' ? s.dateKey : '', at: at, atKey: moshiDateKey_(at), who: s.who,
+        way: '', decide: '', wish: '' };
+      if (s.answer === '未定' && s.who === WHO_PARENT && s.wish && typeof s.wish === 'object') {
+        sub.way = s.wish.way || ''; sub.decide = s.wish.decide || ''; sub.wish = s.wish.wish || '';
+      }
       c.subs.push(sub);
       return sub;
     }
-    function parentSub(c, g, typed, answer, dateKey, at) {
+    // wish：日を相談したいときの {way, decide, wish}（なければ空）
+    function parentSub(c, g, typed, answer, dateKey, at, wish) {
       var names = targetsOf(c, g.id).map(function (t) { return t.student; });
       var m = matchStudent_(typed, names);
       return addSub(c, { id: g.id, typed: typed, matched: m.kind === 'one' ? m.name : '', how: m.kind === 'one' ? HOW_AUTO : '',
-        answer: answer, dateKey: dateKey, at: at, who: WHO_PARENT });
+        answer: answer, dateKey: dateKey, at: at, who: WHO_PARENT, wish: wish || null });
     }
     function studentsFor(cls) {
       var list = o.studentsOf ? o.studentsOf(cls) : null;
@@ -176,7 +181,7 @@
       spring.sentGrades = ['中学1年'];
       var st = pickTargets('A', ['中学1年', '中学2年'], true); // 同じ名前の子（生徒G）は、作った時はまだいなかった形
       st.forEach(function (s) { addTarget(c, spring.id, s.name, s.grade, { metis: s.name === '生徒A' }); });
-      parentSub(c, spring, '生徒A', '未定', '', dayAt(-5, 19, 30));                       // 日を相談・METIS ☑（青）
+      parentSub(c, spring, '生徒A', '未定', '', dayAt(-5, 19, 30), { way: '別の日', decide: '書く', wish: '12月19日（土）14時から' });                       // 日を相談・METIS ☑（青）
       parentSub(c, spring, '生徒 B', '辞退', '', dayAt(-4, 20, 45));                      // 辞退（灰）。空白入りでも合う
       parentSub(c, spring, 'せいとF', '受験', spring.dates[0].key, dayAt(-3, 21, 5));    // ひらがなは合わない → 確かめて
       parentSub(c, spring, '生徒Ｆ', '受験', spring.dates[0].key, dayAt(-3, 21, 8));     // 全角は合う。受験・METIS なし（赤）
@@ -193,9 +198,17 @@
       parentSub(c, oct, '生徒C', '受験', oct.dates[0].key, dayAt(-7, 8, 0));            // 同じ内容の2回目（「2回来た」だけ。黄色にならない）
       parentSub(c, oct, '生徒K', '受験', oct.dates[1].key, dayAt(-10, 21, 40));
       parentSub(c, oct, '生徒K', '辞退', '', dayAt(-6, 22, 30));                         // 違う内容の2回目 → 確かめて（2回来て中身が違う）
-      parentSub(c, oct, '生徒L', '未定', '', dayAt(-9, 19, 2));                          // 日を相談・METIS ☑（青）
+      parentSub(c, oct, '生徒L', '未定', '', dayAt(-9, 19, 2), { way: '分けて', decide: '教室で相談' });                          // 日を相談・METIS ☑（青）
       parentSub(c, oct, '生徒M', '辞退', '', dayAt(-8, 18, 30));                         // 対象外（中1）の名前 → 確かめて
       parentSub(c, oct, 'せいとじぇい', '受験', oct.dates[0].key, dayAt(-2, 22, 15));    // 名前が合わない（生徒J に合わせる）。生徒J は未提出（締切すぎ・赤）
+      // 同じ回の名前の受付中の案内をもう1つ（受験日を足して作り直した形）。一覧では1枚にまとめて数える。
+      // 生徒C は両方にいて、こちらの方が新しい返事 → こちらの行を出す。生徒L はこちらでは未提出 → 前の案内の行を出す
+      var oct2 = addGuide(c, 'A', ext({ name: '新・みやぎ模試・第4回10月号 ', grades: ['中学3年'], targetText: '中学3年生',
+        dates: [{ key: sat(5, 2), time: '14:00' }], withdraw: mon(1, '末'), ret: mon(1, '中旬'),
+        deadlineKey: keyAdd(2), copyFrom: oct.id }), dayAt(-4), OPEN);
+      pickTargets('A', ['中学3年'], true).forEach(function (s) { addTarget(c, oct2.id, s.name, s.grade, { metis: s.name === '生徒C' }); });
+      parentSub(c, oct2, '生徒C', '受験', oct2.dates[0].key, dayAt(-1, 20, 0));
+      parentSub(c, oct2, 'せいとけー', '未定', '', dayAt(-1, 21, 10), { way: '自宅', decide: '書く', wish: '12月18日（金）16時以降に取りに行きます' }); // 名前が合わない・日を相談（希望つき）
     })();
     seeding = false;
 
@@ -236,9 +249,9 @@
         var f = findGuideAny(String(s.id || ''));
         if (!f) return;
         seenSubs[key] = true;
-        var chk = checkMoshiSubmit_({ name: s.name, answer: s.answer, dateKey: s.dateKey }, f.g.dates.map(function (d) { return d.key; }));
+        var chk = checkMoshiSubmit_({ name: s.name, answer: s.answer, dateKey: s.dateKey, way: s.way, decide: s.decide, wish: s.wish }, f.g.dates.map(function (d) { return d.key; }));
         if (!chk.ok) return;
-        parentSub(classes[f.code], f.g, chk.value.name, chk.value.answer, chk.value.dateKey, new Date(Number(s.at) || Date.now()));
+        parentSub(classes[f.code], f.g, chk.value.name, chk.value.answer, chk.value.dateKey, new Date(Number(s.at) || Date.now()), { way: chk.value.way, decide: chk.value.decide, wish: chk.value.wish });
       });
       for (var k in classes) classes[k].guides.forEach(function (g) { x.guides[g.id] = parentGuide(g, k); });
       storeWrite(x);
@@ -265,16 +278,19 @@
       var rows = targets.map(function (t) {
         var mine = (byStudent[t.student] || []).slice().sort(function (x, y) { return x.at - y.at || x.row - y.row; });
         var st = moshiStudentState_(mine.map(function (s) { return { who: s.who, answer: s.answer, dateKey: s.dateKey, atKey: s.atKey, at: s.at.getTime() }; }), lastExamKey);
+        var lp = st.answer === '未定' ? latestParent(mine) : null; // 日が未定の子は、いちばん新しい保護者の受け方・決め方・希望
         return {
           row: t.row, student: t.student, grade: t.grade, st: st,
           view: moshiRowView_(st, { metis: t.metis, noBill: t.noBill, cleaned: t.cleaned }, { cancelled: cancelled, deadlinePassed: deadlinePassed }),
           metis: t.metis, noBill: t.noBill, cleaned: t.cleaned, memo: t.memo,
-          history: mine.map(function (s) { return { who: s.who, answerLabel: answerLabel(s.answer, s.dateKey), atLabel: atLabel(s.at) }; })
+          history: mine.map(function (s) { return { who: s.who, answerLabel: answerLabel(s.answer, s.dateKey), atLabel: atLabel(s.at) }; }),
+          way: lp ? lp.way : '', decide: lp ? lp.decide : '', wish: lp ? lp.wish : ''
         };
       });
       var names = targets.map(function (t) { return t.student; });
       var unmatched = unmatchedSubs.map(function (s) {
-        return { subRow: s.row, typed: s.typed, answerLabel: answerLabel(s.answer, s.dateKey), atLabel: atLabel(s.at), candidates: rankByCloseness_(s.typed, names, 5) };
+        return { subRow: s.row, typed: s.typed, answerLabel: answerLabel(s.answer, s.dateKey), atLabel: atLabel(s.at), candidates: rankByCloseness_(s.typed, names, 5),
+          way: s.answer === '未定' ? s.way : '', decide: s.answer === '未定' ? s.decide : '', wish: s.answer === '未定' ? s.wish : '' };
       });
       return {
         id: g.id, url: urlOf(g.id), name: g.name, grades: g.grades.slice(), targetText: g.targetText, venue: g.venue,
@@ -285,6 +301,11 @@
         view: moshiGuideView_({ cancelled: cancelled, lastExamKey: lastExamKey, deadlinePassed: deadlinePassed, grades: g.grades }, rows, unmatched.length, todayKey),
         rows: rows, unmatched: unmatched
       };
+    }
+    // いちばん新しい保護者の申込（MoshiApi.gs の moshiLatestParent_ と同じ）
+    function latestParent(subs) {
+      for (var i = subs.length - 1; i >= 0; i--) if (subs[i].who === WHO_PARENT) return subs[i];
+      return null;
     }
     function textOf(g) {
       return buildMoshiMessage_(SEND_LINES, moshiMessageVals_(g, RECOMMEND[g.recommend] || '', urlOf(g.id)));

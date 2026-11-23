@@ -107,15 +107,13 @@
         // 教室長の返事はいつも勝つ（そのあとに保護者の違う内容は来ていないので「確かめて」は消える）
         r.st = { answer: p.answer, dateKey: p.answer === '受験' ? p.dateKey : '', by: '教室長', count: r.st.count, check: '' };
         r.history = r.history.concat([{ who: '教室長', answerLabel: answerLabel(p.answer, p.dateKey), atLabel: nowLabel() }]);
+        if (p.answer !== '未定') { r.way = ''; r.decide = ''; r.wish = ''; } // 保護者の受け方・希望は「日が未定」のときだけ出す
       }
       r.view = moshiRowView_(r.st, { metis: r.metis, noBill: r.noBill, cleaned: r.cleaned }, { cancelled: cancelled, deadlinePassed: deadlinePassed });
     });
     d.view = moshiGuideView_({ cancelled: cancelled, lastExamKey: keys.length ? keys[keys.length - 1] : '', deadlinePassed: deadlinePassed, grades: d.grades },
       d.rows, d.unmatched.length, todayKey());
     return d;
-  }
-  function visibleGuides() {
-    return guideIds().map(viewGuide).filter(function (g) { return g && (M.showDone || !g.view.finished); });
   }
   function takeGuide(g) {
     M.base[g.id] = g;
@@ -228,7 +226,7 @@
   function renderTabs() {
     if (!M.tabsEl) return;
     var checks = 0;
-    if (M.data) visibleGuides().forEach(function (g) { checks += g.view.checks; });
+    if (M.data) visibleGroups().forEach(function (grp) { checks += grp.stats.checks; });
     clear(M.tabsEl);
     M.tabsEl.appendChild(h('button', { type: 'button', class: 'tab' + (M.tab === 'make' ? ' on' : ''), text: '案内を作る',
       onclick: function () { show('make'); } }));
@@ -496,12 +494,87 @@
       render(); // 作ったら入力欄を止める
     });
   }
-  // ================= 一覧（2026-11-23 本人の直し：数のタイル＋1人1行。行は開かない）=================
+  // ================= 一覧（2026-11-23 本人の直し：数のタイル＋1人1行。行は開かない。同じ回の名前の受付中の案内は1枚にまとめて集計）=================
+  // 'M月d日 H:mm' を比べられる数に（年はない。12月と1月をまたぐときは1月の方を新しいとみる）
+  function atNum(label) {
+    var m = /^(\d+)月(\d+)日 (\d+):(\d+)$/.exec(String(label || ''));
+    return m ? Number(m[1]) * 1000000 + Number(m[2]) * 10000 + Number(m[3]) * 100 + Number(m[4]) : 0;
+  }
+  function newerAt(a, b) {
+    var ma = Math.floor(a / 1000000), mb = Math.floor(b / 1000000);
+    if (a && b && Math.abs(ma - mb) > 6) return ma < mb; // 年をまたいだ
+    return a > b;
+  }
+  function lastAt(r) { return r.history.length ? atNum(r.history[r.history.length - 1].atLabel) : 0; }
+
+  // 案内をカードの単位にまとめる。受付中は回の名前（前後の空白を取る）が同じ物を1つに。取り消しは1つずつ
+  function guideGroups() {
+    var groups = [], at = {};
+    guideIds().map(viewGuide).filter(Boolean).forEach(function (g) {
+      var key = g.status === '受付中' ? 'n:' + String(g.name || '').trim() : 'c:' + g.id;
+      if (!(key in at)) { at[key] = groups.length; groups.push({ key: key, guides: [] }); }
+      groups[at[key]].guides.push(g);
+    });
+    groups.forEach(groupStats);
+    return groups;
+  }
+  // まとめた案内の数え方：子ごとに1行（返事のある方、両方あれば来た日時が新しい方の案内の行）
+  function groupStats(grp) {
+    var gs = grp.guides;
+    var byKid = {}, order = [];
+    gs.forEach(function (g) {
+      g.rows.forEach(function (r) {
+        var cur = byKid[r.student];
+        var item = { g: g, r: r };
+        if (!cur) { byKid[r.student] = item; order.push(r.student); return; }
+        var ca = !!cur.r.st.answer, na = !!r.st.answer;
+        if ((na && !ca) || (na && ca && newerAt(lastAt(r), lastAt(cur.r)))) byKid[r.student] = item;
+      });
+    });
+    var rows = order.map(function (n) { return byKid[n]; });
+    rows.sort(function (x, y) {
+      return gradeOrder(x.r.grade) - gradeOrder(y.r.grade) || (x.r.grade < y.r.grade ? -1 : x.r.grade > y.r.grade ? 1 : 0) ||
+        (x.r.student < y.r.student ? -1 : x.r.student > y.r.student ? 1 : 0);
+    });
+    var unmatched = [];
+    gs.forEach(function (g) { g.unmatched.forEach(function (u) { unmatched.push({ g: g, u: u }); }); });
+    var dates = [], seen = {};
+    gs.forEach(function (g) { g.dates.forEach(function (d) { if (!seen[d.key]) { seen[d.key] = true; dates.push(d); } }); });
+    dates.sort(function (a, b) { return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; });
+    var dl = gs.reduce(function (best, g) { return !best || g.deadlineKey > best.deadlineKey ? g : best; }, null);
+    var targets = [];
+    gs.forEach(function (g) { if (targets.indexOf(g.targetText) < 0) targets.push(g.targetText); });
+    var grades = [];
+    if (targets.length > 1) gs.forEach(function (g) { g.grades.forEach(function (x) { if (grades.indexOf(x) < 0) grades.push(x); }); });
+    grades.sort(function (a, b) { return gradeOrder(a) - gradeOrder(b); });
+    var s = { submitted: 0, total: rows.length, checks: unmatched.length, unbilled: 0, cleanup: 0 };
+    rows.forEach(function (x) {
+      if (x.r.st.answer) s.submitted += 1;
+      if (x.r.view.color === 'yellow') s.checks += 1;
+      if (x.r.view.next === 'METISで請求を作る') s.unbilled += 1;
+      if (x.r.view.next === 'METISの請求を消す') s.cleanup += 1;
+    });
+    grp.name = gs[0].name;
+    grp.cancelled = gs[0].status === '取り消し';
+    grp.finished = gs.every(function (g) { return g.view.finished; });
+    grp.rows = rows;
+    grp.unmatched = unmatched;
+    grp.dates = dates;
+    grp.deadlineKey = dl ? dl.deadlineKey : '';
+    grp.deadlineLabel = dl ? dl.deadlineLabel : '';
+    grp.targetText = targets.length > 1 ? grades.join('・') : (targets[0] || '');
+    grp.stats = s;
+    return grp;
+  }
+  function visibleGroups() {
+    return guideGroups().filter(function (grp) { return M.showDone || !grp.finished; });
+  }
+
   function renderList() {
     var root = M.root;
-    var all = guideIds().map(viewGuide).filter(Boolean);
-    var hiddenN = all.filter(function (g) { return g.view.finished; }).length;
-    var shown = visibleGuides();
+    var all = guideGroups();
+    var hiddenN = all.filter(function (grp) { return grp.finished; }).length;
+    var shown = all.filter(function (grp) { return M.showDone || !grp.finished; });
     root.appendChild(h('section', { class: 'card' }, [
       h('div', { class: 'filters' }, [
         h('label', { class: 'check' }, [h('input', { type: 'checkbox', checked: M.showDone, 'data-k': 'show-done',
@@ -510,14 +583,14 @@
         h('span', { class: 'spacer' }),
         h('span', { class: 'small muted', text: M.listTime ? M.listTime + ' に読みました' : '' })
       ]),
-      h('p', { class: 'small muted', style: 'margin:6px 0 0', text: '数のタイルを押すと、その人だけを出します（もう一度押すと全員）。返事は▼で直せます（紙・メッセージで来た分もここ）。メモは欄の外を押すと保存します。' }),
+      h('p', { class: 'small muted', style: 'margin:6px 0 0', text: '同じ回の名前の案内は1枚にまとめて数えます。数のタイルを押すと、その人だけを出します（もう一度押すと全員）。返事は▼で直せます（紙・メッセージで来た分もここ）。メモは欄の外を押すと保存します。' }),
       msgEl(M.err, 'error')
     ]));
     if (!shown.length) {
       root.appendChild(h('section', { class: 'card' }, [h('p', { class: 'empty', text: all.length ? '出している回はありません（終わった回は「終わった回も出す」で見られます）。' : 'まだ案内がありません。「案内を作る」から作ります。' })]));
       return;
     }
-    shown.forEach(function (g) { root.appendChild(card(g)); });
+    shown.forEach(function (grp) { root.appendChild(card(grp)); });
   }
 
   function tag(text, color) { return h('span', { class: 'mo-tag c-' + color, text: text }); }
@@ -529,56 +602,59 @@
     return a === '未定' || a === '辞退' ? a : '';
   }
 
-  function card(g) {
-    var v = g.view;
-    var cancelled = g.status === '取り消し';
-    var deadlinePassed = !!g.deadlineKey && todayKey() > g.deadlineKey;
-    var filter = M.filter[g.id];
+  function card(grp) {
+    var s = grp.stats;
+    var cancelled = grp.cancelled;
+    var deadlinePassed = !!grp.deadlineKey && todayKey() > grp.deadlineKey;
+    var filter = M.filter[grp.key];
     // 数のタイル（受験日ごと・日を相談・辞退・未提出）。押すとその人だけ
-    var tiles = g.dates.map(function (d) { return { key: 'd:' + d.key, label: d.short, sub: d.time + '〜' }; })
+    var tiles = grp.dates.map(function (d) { return { key: 'd:' + d.key, label: d.short, sub: d.time + '〜' }; })
       .concat([{ key: '未定', label: '日を相談' }, { key: '辞退', label: '辞退' }, { key: '', label: '未提出' }]);
     var count = {};
-    g.rows.forEach(function (r) { var k = tileKeyOf(r); count[k] = (count[k] || 0) + 1; });
+    grp.rows.forEach(function (x) { var k = tileKeyOf(x.r); count[k] = (count[k] || 0) + 1; });
     var tileEls = tiles.map(function (t) {
       var on = filter === t.key;
       return h('button', { type: 'button', class: 'mo-tile' + (on ? ' on' : '') + (t.key === '' && deadlinePassed && !cancelled && count[''] ? ' late' : ''),
-        'aria-pressed': on ? 'true' : 'false', 'data-k': 'tile-' + g.id + '-' + t.key,
-        onclick: function () { if (on) delete M.filter[g.id]; else M.filter[g.id] = t.key; render(); } }, [
+        'aria-pressed': on ? 'true' : 'false', 'data-k': 'tile-' + grp.key + '-' + t.key,
+        onclick: function () { if (on) delete M.filter[grp.key]; else M.filter[grp.key] = t.key; render(); } }, [
         h('span', { class: 'mo-tile-l', text: t.label }), t.sub ? h('span', { class: 'mo-tile-s', text: t.sub }) : null,
         h('span', { class: 'mo-tile-n' }, [h('b', { text: String(count[t.key] || 0) }), '人'])]);
     });
     var tags = [];
-    if (v.checks) tags.push(tag('確かめて ' + v.checks, 'yellow'));
-    if (v.unbilled) tags.push(tag('METIS未請求 ' + v.unbilled, 'red'));
-    if (v.cleanup) tags.push(tag('METISの請求を消す ' + v.cleanup, 'red'));
+    if (s.checks) tags.push(tag('確かめて ' + s.checks, 'yellow'));
+    if (s.unbilled) tags.push(tag('METIS未請求 ' + s.unbilled, 'red'));
+    if (s.cleanup) tags.push(tag('METISの請求を消す ' + s.cleanup, 'red'));
 
-    var rows = g.rows.filter(function (r) { return filter === undefined || tileKeyOf(r) === filter; });
+    var rows = grp.rows.filter(function (x) { return filter === undefined || tileKeyOf(x.r) === filter; });
     var kids = [
-      h('div', { class: 'mo-head' }, [h('h2', { text: g.name }), cancelled ? tag('取り消し', 'gray') : null, v.finished ? tag('終わった回', 'gray') : null]),
-      h('p', { class: 'mo-sub' }, [g.targetText + '／締切 ' + g.deadlineLabel,
+      h('div', { class: 'mo-head' }, [h('h2', { text: grp.name }), cancelled ? tag('取り消し', 'gray') : null, grp.finished ? tag('終わった回', 'gray') : null,
+        grp.guides.length > 1 ? h('span', { class: 'small muted', text: '（案内 ' + grp.guides.length + 'つをまとめて数えています）' }) : null]),
+      h('p', { class: 'mo-sub' }, [grp.targetText + '／締切 ' + grp.deadlineLabel,
         deadlinePassed && !cancelled ? h('b', { class: 'mo-late', text: '（すぎました）' }) : null]),
-      h('div', { class: 'mo-counts' }, [h('b', { class: 'mo-big', text: '出した ' + v.submitted + '／' + v.total + '人' })]),
+      h('div', { class: 'mo-counts' }, [h('b', { class: 'mo-big', text: '出した ' + s.submitted + '／' + s.total + '人' })]),
       h('div', { class: 'mo-tiles', role: 'group', 'aria-label': '数（押すとその人だけ出す）' }, tileEls),
       tags.length ? h('div', { class: 'mo-tags' }, tags) : null
     ];
-    if (g.unmatched.length) kids.push(unmatchedBox(g));
+    if (grp.unmatched.length) kids.push(unmatchedBox(grp.unmatched));
     kids.push(h('div', { class: 'table-wrap' }, [h('table', { class: 'list mo-list' }, [
       h('thead', null, [h('tr', null, [h('th', { text: '生徒' }), h('th', { text: '返事' }), h('th', { class: 'hit-head', text: 'METIS' }),
         h('th', { class: 'hit-head', text: '請求しない' }), h('th', { text: 'メモ' }), h('th', { style: 'text-align:right', text: '次にやること' })])]),
-      h('tbody', null, rowsOf(g, rows))
+      h('tbody', null, rowsOf(grp, rows))
     ])]));
     if (filter !== undefined) {
-      kids.push(h('p', null, [h('button', { type: 'button', class: 'btn btn-sm', text: '全員を出す', onclick: function () { delete M.filter[g.id]; render(); } })]));
+      kids.push(h('p', null, [h('button', { type: 'button', class: 'btn btn-sm', text: '全員を出す', onclick: function () { delete M.filter[grp.key]; render(); } })]));
     }
-    if (M.msg[g.id]) kids.push(msgEl(M.msg[g.id].text, M.msg[g.id].kind));
-    return h('section', { class: 'card mo-card' + (cancelled ? ' mo-cancelled' : ''), 'data-gid': g.id }, kids);
+    grp.guides.forEach(function (g) { if (M.msg[g.id]) kids.push(msgEl(M.msg[g.id].text, M.msg[g.id].kind)); });
+    return h('section', { class: 'card mo-card' + (cancelled ? ' mo-cancelled' : ''), 'data-gid': grp.guides[0].id, 'data-group': grp.key }, kids);
   }
 
-  function rowsOf(g, rows) {
-    var cancelled = g.status === '取り消し';
-    var out = rows.map(function (r) {
+  // 1行の▼・METIS・請求しない・メモは、その行の案内（g.id と row）に保存する
+  function rowsOf(grp, rows) {
+    var out = rows.map(function (x) {
+      var g = x.g, r = x.r;
+      var cancelled = g.status === '取り消し';
       var key = g.id + '|' + r.row;
-      // 返事の▼：受験〇日／日が未定／辞退（未提出のときは空）。選ぶと教室長の申込として保存（教室長の内容がいつも勝つ）
+      // 返事の▼：その行の案内の受験日／日が未定／辞退（未提出のときは空）。選ぶと教室長の申込として保存（教室長の内容がいつも勝つ）
       var opts = r.st.answer ? [] : [['', '（未提出）']];
       g.dates.forEach(function (d) { opts.push(['受験|' + d.key, '受験 ' + d.short]); });
       opts.push(['未定', '日が未定'], ['辞退', '辞退']);
@@ -597,7 +673,8 @@
       return h('tr', { class: 'r c-' + r.view.color }, [
         h('td', null, [h('b', { text: r.student }), h('span', { class: 'mo-grade-s', text: r.grade }),
           r.st.count >= 2 ? h('span', { class: 'mo-two', text: r.st.count + '回来た' }) : null]),
-        h('td', { class: 'mo-ans-cell' }, [ans, r.st.by === '教室長' ? h('span', { class: 'mo-by', text: '教室長が入れた' }) : null]),
+        h('td', { class: 'mo-ans-cell' }, [ans, r.st.by === '教室長' ? h('span', { class: 'mo-by', text: '教室長が入れた' }) : null,
+          r.st.answer === '未定' && moshiWishLine_(r.way, r.decide, r.wish) ? h('span', { class: 'mo-wish', text: moshiWishLine_(r.way, r.decide, r.wish) }) : null]),
         // METIS を外したときは「消した」の印も外す（請求後に辞退なら赤の札 → METISで消したら ☑ を外す）
         check('metis', 'METISで請求を作った', function (on) { return on ? { metis: true } : { metis: false, cleaned: false }; }),
         check('noBill', '請求しない', function (on) { return { noBill: on }; }),
@@ -607,18 +684,20 @@
         h('td', { class: 'next-cell' }, [h('span', { class: 'next', text: r.view.next })])
       ]);
     });
-    if (!rows.length) out.push(h('tr', null, [h('td', { colspan: 6, class: 'muted', text: g.rows.length ? 'このタイルの人はいません。' : '対象の生徒がいません。' })]));
+    if (!rows.length) out.push(h('tr', null, [h('td', { colspan: 6, class: 'muted', text: grp.rows.length ? 'このタイルの人はいません。' : '対象の生徒がいません。' })]));
     return out;
   }
 
   // 名前が合わない申込：打った名前・選んだ内容・来た日時・「子を選ぶ」
-  function unmatchedBox(g) {
-    var items = g.unmatched.map(function (u) {
+  function unmatchedBox(list) {
+    var items = list.map(function (x) {
+      var g = x.g, u = x.u;
       var key = g.id + '|' + u.subRow;
       var open = M.match === key;
       var busy = M.busy === 'match-' + key;
       var kids = [h('div', { class: 'row' }, [
-        h('b', { text: '「' + u.typed + '」' }), h('span', { text: u.answerLabel }), h('span', { class: 'muted', text: u.atLabel }),
+        h('b', { text: '「' + u.typed + '」' }), h('span', { text: u.answerLabel }), moshiWishLine_(u.way, u.decide, u.wish) ? h('span', { class: 'mo-wish', text: moshiWishLine_(u.way, u.decide, u.wish) }) : null,
+        h('span', { class: 'muted', text: u.atLabel }),
         h('button', { type: 'button', class: 'btn btn-sm', 'data-k': 'match-' + key, 'aria-expanded': open ? 'true' : 'false', text: open ? '閉じる' : '子を選ぶ',
           disabled: !!M.busy, onclick: function () { M.match = open ? '' : key; M.matchQuery = ''; render(); } })
       ])];
@@ -626,7 +705,7 @@
       return h('li', null, kids);
     });
     return h('div', { class: 'mo-unmatched c-yellow' }, [
-      h('h3', { text: '名前が合わない申込（' + g.unmatched.length + '）' }),
+      h('h3', { text: '名前が合わない申込（' + list.length + '）' }),
       h('p', { class: 'small', text: '保護者が打った名前が生徒一覧と合いませんでした。正しい子を選んでください。' }),
       h('ul', null, items)
     ]);
