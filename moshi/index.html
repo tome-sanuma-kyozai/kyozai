@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>模試 受験申込書</title>
+<!--
+  保護者の模試の画面（設計：03_店舗運営/成果物/2026-11-21_模試の案内_設計.md の Task 6）
+  リンク：…/moshi/?id=案内番号（M＋教室コード A〜D・T＋12文字。例 MTk3m9pq2xrstu）
+
+  通信（Task 4 の形）
+    GET  API_URL?api=moshiGet&id=案内番号
+      → {ok:true, status:'open', id, guide:{name, targetText, venue, dates:[{key,time,label,short}], datesText,
+           feeLabel, withdraw, ret, deadlineLabel, range, timetable, recommendText}, cls:{name, address, tel}}
+      → {ok:true, status:'cancelled', cls:{name, tel}} ／ {ok:false, error:'notfound'|'unavailable'}
+    POST API_URL（Content-Type: text/plain）{api:'moshiSubmit', id, name, answer:'受験'|'未定'|'辞退', dateKey, way, decide, wish, website, clientKey}
+      （未定のときだけ way:'別の日'|'分けて'|'自宅'、decide:'書く'|'教室で相談'、wish:ご希望の日時（書くときだけ 1〜100文字））
+      → {ok:true, receipt:{name, answerLabel, appliedAtLabel}} ／ {ok:false, error, cancelled?:true, cls?}
+
+  試し（?mock=1）：通信せず、下の localStorage を使う
+    ?mock=1                    → id がなければ MTk3m9pq2xrstu として開く
+    ?mock=1&id=案内番号        → localStorage にその番号の案内があればそれ、なければ組み込みの架空の案内
+    ?mock=1&cancelled=1        → 取り消しの画面
+    ?mock=1&id=xxx（読めない）→「このリンクは使えません」
+
+  localStorage のキー 'moshiMock:v1'（教室長アプリの偽API site/app/moshi-mock.js もこの形で読み書きする）
+    {
+      guides: {
+        [案内番号]: {
+          guide: {name, targetText, venue, dates:[{key:'YYYY-MM-DD', time:'HH:MM', label:'9月19日（土）', short:'9/19（土）'}],
+                  datesText, feeLabel, withdraw, ret, deadlineLabel, range, timetable, recommendText},   // moshiApiGet_ の guide と同じ
+          cls: {name, address, tel},                                                                     // moshiApiGet_ の cls と同じ
+          status: 'open' | 'cancelled'
+        }
+      },
+      subs: [ {id: 案内番号, name: 打った名前（前後の空白を取った物）, answer: '受験'|'未定'|'辞退', way, decide, wish（未定のときだけ。ほかは ''）,
+               dateKey: 'YYYY-MM-DD'（受験のときだけ。ほかは ''）, at: 送った時刻（ミリ秒の数）, clientKey} ]   // 古い順に足していく
+    }
+    この画面は subs に足すだけ（消さない・書きかえない）。guides は読むだけ（書くのは教室長アプリの偽API）。
+    同じ id・clientKey の行がもうあれば足さずに、その行の控えを返す。website に何か入っていれば足さずに「受け付けました」。
+-->
+<style>
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: #f4f5f7; color: #1f2328; font-size: 17px; line-height: 1.7;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 22px; text-align: center; margin: 8px 0 16px; }
+  h2 { font-size: 19px; margin: 0 0 12px; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .lead { font-size: 18px; margin: 0; }
+  .student { font-size: 19px; font-weight: bold; margin: 0 0 8px; }
+  /* 文は「。」「、」「／」の切れ目で折り返す（言葉の途中で切れないように）。対応しているブラウザは文節でも折り返す */
+  .s { display: inline-block; max-width: 100%; }
+  body { word-break: auto-phrase; }
+  .round { font-size: 20px; font-weight: bold; margin: 0 0 6px; }
+  .summary { font-size: 17px; margin: 0; }
+  .who-note { margin: 0 0 12px; font-weight: bold; color: #174ea6; }
+  .summary .line { display: block; margin: 2px 0; }
+  /* 日時は「日」「時刻」「（どちらか1日）」のかたまりの切れ目だけで折り返す */
+  .nw { display: inline-block; white-space: nowrap; }
+  /* たたんだ欄の最後の「すすめの一文」：時間割と分けて、1文ずつ自然に折り返す */
+  .detail .note { margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid #e3e5e8; }
+  .detail .note .sent { display: block; margin-bottom: 4px; }
+  fieldset { border: 0; margin: 16px 0 0; padding: 0; }
+  legend { font-weight: bold; margin-bottom: 8px; padding: 0; }
+  .field-label { display: block; font-weight: bold; margin-bottom: 6px; }
+  input[type=text] { width: 100%; min-height: 48px; font-size: 18px; padding: 12px; border: 1px solid #c9ced6; border-radius: 8px; }
+  /* 日を相談したいときだけ出す「受け方・決め方・ご希望の日時」 */
+  .wish { margin: 4px 0 6px; padding: 12px 0 0; border-top: 1px solid #e3e5e8; }
+  .wish .field-label { margin-top: 6px; }
+  .wish .wish-ex { font-size: 16px; color: #3c4043; margin: 0 0 6px; }
+  button.opt .opt-sub { display: block; font-size: 15px; font-weight: normal; margin-top: 2px; }
+  .wish textarea::placeholder { color: #80868b; }
+  .wish textarea { display: block; width: 100%; min-height: 88px; font: inherit; font-size: 18px; line-height: 1.6; padding: 12px; border: 1px solid #c9ced6; border-radius: 8px; resize: vertical; }
+  .error { color: #b3261e; font-weight: bold; margin: 12px 0 0; }
+  button { display: block; width: 100%; min-height: 48px; margin-top: 16px; padding: 16px; font-size: 19px; font-weight: bold;
+    color: #fff; background: #1a73e8; border: 0; border-radius: 10px; cursor: pointer; }
+  button:disabled { background: #9aa0a6; cursor: default; }
+  /* 選ぶボタン（1つだけ選べる）。選んだ物は青くぬる */
+  button.opt { margin: 0 0 10px; padding: 12px 14px; min-height: 56px; font-size: 18px; text-align: left;
+    color: #1f2328; background: #fff; border: 2px solid #c9ced6; }
+  button.opt.exam { font-size: 19px; }
+  button.opt[aria-pressed=true] { color: #fff; background: #1a73e8; border-color: #1a73e8; }
+  button.opt[aria-pressed=true]::before { content: "✓ "; }
+  button.sub { color: #1a73e8; background: #fff; border: 2px solid #1a73e8; }
+  .hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  details { margin: 0; }
+  summary { min-height: 48px; display: flex; align-items: center; font-weight: bold; cursor: pointer; color: #174ea6; }
+  .detail h3 { font-size: 17px; margin: 12px 0 2px; }
+  .detail p { margin: 0 0 6px; }
+  .pre { white-space: pre-wrap; }
+  .receipt-list { margin: 8px 0 12px; padding: 0; list-style: none; border-top: 1px solid #e3e5e8; }
+  .receipt-list li { padding: 10px 0; border-bottom: 1px solid #e3e5e8; }
+  .receipt-list .k { display: block; font-size: 15px; color: #3c4043; }
+  .receipt-list .v { font-size: 19px; font-weight: bold; }
+  .small { font-size: 16px; color: #3c4043; }
+  .small p { margin: 0 0 10px; }
+  footer { text-align: center; font-size: 16px; color: #3c4043; padding: 8px 0 24px; }
+  footer p { margin: 0; }
+  footer a, #message-cls a { color: #174ea6; font-weight: bold; display: inline-block; min-height: 44px; line-height: 44px; }
+</style>
+</head>
+<body>
+<main>
+<h1>模試 受験申込書</h1>
+
+<section id="loading" class="card"><p class="lead">読み込んでいます…</p></section>
+<section id="message" class="card" hidden>
+  <p class="lead" id="message-text"></p>
+  <div id="message-cls" hidden>
+    <p id="message-cls-name"></p>
+    <p id="message-cls-tel"></p>
+  </div>
+  <button id="retry" type="button" hidden onclick="location.reload()">もう一度読み込む</button>
+</section>
+
+<form id="form" novalidate hidden>
+  <section class="card">
+    <p class="round" id="round"></p>
+    <p class="summary" id="summary"></p>
+  </section>
+
+  <section class="card">
+    <p class="who-note">おうちの方が入力してください。</p>
+    <label class="field-label" for="studentName">生徒のお名前（漢字でフルネーム）</label>
+    <input id="studentName" type="text" maxlength="40" autocomplete="off">
+    <div class="hp" aria-hidden="true">
+      <label for="website">この欄は空のままにしてください</label>
+      <input id="website" name="website" type="text" tabindex="-1" autocomplete="off">
+    </div>
+    <fieldset>
+      <legend>受験について、1つ選んでください</legend>
+      <div id="choices"></div>
+      <!-- 「日を相談したい」を選んだときだけ出す（ほかを選び直したら隠して、中身は送らない） -->
+      <div id="wish-box" class="wish" hidden>
+        <p class="field-label">1. ご希望の受け方を選んでください</p>
+        <div id="way-choices"></div>
+        <!-- 2 は 1 を選んでから出す（選び忘れを防ぐ）。3 は 2 で「希望の日時を書く」を選んだときだけ -->
+        <div id="decide-step" hidden>
+        <p class="field-label">2. 日時の決め方を選んでください</p>
+        <div id="decide-choices"></div>
+        </div>
+        <div id="wish-write" hidden>
+          <label class="field-label" for="wish" id="wish-label">ご希望の日時</label>
+          <p class="wish-ex" id="wish-hours"></p>
+          <textarea id="wish" maxlength="100" rows="3"></textarea>
+        </div>
+      </div>
+    </fieldset>
+    <p id="error" class="error" role="alert" hidden></p>
+    <button id="submit" type="submit">送る</button>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>時間割・範囲・返却・引き落とし</summary>
+      <div class="detail" id="detail"></div>
+    </details>
+  </section>
+
+  <section class="card small">
+    <p>変更・辞退は塾生アプリのメッセージでご連絡ください。</p>
+    <p>＊ご提示いただいた個人情報は、下記のように使用させて頂いております。<br>
+      （１）学習指導、記録指導、学習状況のご報告、進路相談、集計・管理、ご請求に関する事務処理など明光義塾のサービス提供のため<br>
+      （２）上の（１）の利用目的の達成の範囲での、明光義塾本部への提供のため。</p>
+    <p>お申込内容は、教室が利用するGoogleのサービスに保存します。</p>
+  </section>
+</form>
+
+<section id="receipt" class="card" hidden></section>
+
+<footer id="footer" hidden>
+  <p id="cls-name"></p>
+  <p id="cls-address"></p>
+  <p id="cls-tel"></p>
+</footer>
+</main>
+
+<script>
+// 申込のデータを読み書きする Apps Script の Webアプリの URL（「デプロイを管理」のウェブアプリの URL、…/exec）。Task 9 で入れる
+var API_URL = 'https://script.google.com/macros/s/AKfycbwJhgixhy_V7w1JFTqt8PK8Ugfm8M1lO7Xel7R20J7S7Pyb4GjHFhwgIKBXtuJd7qjU/exec';
+
+(function () {
+  var EXAM = '受験';
+  var UNDECIDED = '未定';
+  var DECLINE = '辞退';
+  var MSG_BAD_LINK = 'このリンクは使えません。教室にお問い合わせください。';
+  var MSG_UNAVAILABLE = 'ただいま表示できません。時間をおいて、もう一度お開きください。';
+  var MSG_NETWORK = '通信できませんでした。電波のよいところで、もう一度「送る」を押してください。';
+  var MSG_CANCELLED = 'この案内は取り消されました。教室にお問い合わせください。';
+  var MSG_NO_NAME = '生徒のお名前を入力してください';
+  var MSG_LONG_NAME = 'お名前は40文字までです';
+  var MSG_NO_CHOICE = '受験する日か、「日を相談したい」「辞退する」を選んでください';
+  var MSG_NO_WISH = 'ご希望の日時をご記入ください';
+  var MSG_NO_WAY = 'ご希望の受け方を選んでください';
+  var MSG_NO_DECIDE = '日時の決め方を選んでください';
+  // 日を相談したいとき：受け方・決め方（値は Logic.gs の MOSHI_WAYS・MOSHI_DECIDES と同じ）
+  var WAYS = [
+    { v: '別の日', text: '別の日に受けたい', label: 'ご希望の日時', hours: '平日は16時以降、土曜は14時からでお願いします（教室が開いている時間です）。',
+      ex: '例：12月19日（土）14時から、12月の平日16時以降' },
+    { v: '分けて', text: '何日かに分けて受けたい', sub: '例：1日目に英語、2日目に残りの4教科', label: 'ご希望の日時',
+      hours: '平日は16時以降、土曜は14時からでお願いします（教室が開いている時間です）。', ex: '例：12月19日（土）14時から英語・数学、12月22日（火）16時から残りの3教科' },
+    { v: '自宅', text: '自宅で受けたい', sub: '問題をお持ち帰りいただき、答案を教室へお持ちください', label: '問題を取りに来る日・答案を持ってくる日のご希望',
+      hours: '問題の受け取り・答案のお持ちこみも、平日は16時以降、土曜は14時からでお願いします。', ex: '例：12月18日（金）16時以降に取りに行き、12月26日（土）に持っていきます' }
+  ];
+  var DECIDES = [{ v: '書く', text: '希望の日時を書く' }, { v: '教室で相談', text: '教室で本人と相談して決めてよい' }];
+  function wayOf(v) { for (var i = 0; i < WAYS.length; i++) if (WAYS[i].v === v) return WAYS[i]; return null; }
+  function decideText(v) { for (var i = 0; i < DECIDES.length; i++) if (DECIDES[i].v === v) return DECIDES[i].text; return ''; }
+  var MSG_LONG_WISH = 'ご希望の日時は100文字までです';
+  var MOCK_KEY = 'moshiMock:v1';
+  var MOCK_DEFAULT_ID = 'MTk3m9pq2xrstu';
+  var ID_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+  // Logic.gs の parseMoshiId_ と同じ決まり：全角は半角に、前後のごみは無視。M＋教室コード＋12文字で、後ろに番号の文字が続かない物だけ
+  function parseMoshiId(raw) {
+    if (raw === null || raw === undefined) return null;
+    var s = String(raw).replace(/[！-～]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); });
+    var m = /M([ABCDT])([abcdefghjkmnpqrstuvwxyz23456789]{12})(?![A-Za-z0-9])/i.exec(s);
+    if (!m) return null;
+    return { id: 'M' + m[1].toUpperCase() + m[2].toLowerCase(), classCode: m[1].toUpperCase() };
+  }
+  function safeDecode(s) {
+    try { return decodeURIComponent(String(s).replace(/\+/g, ' ')); } catch (e) { return String(s); }
+  }
+  function $(id) { return document.getElementById(id); }
+  function trim(s) { return String(s || '').replace(/^[\s　]+|[\s　]+$/g, ''); }
+  // 文を「。」「、」のところで区切り、区切りごとに折り返す。文字は textContent で入れる
+  function setText(el, text) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var parts = String(text).replace(/([。、])/g, '$1\u0000').split('\u0000');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var s = document.createElement('span');
+      s.className = 's';
+      s.textContent = parts[i];
+      el.appendChild(s);
+    }
+  }
+  // 日時の文（例「12月19日（土）・12月26日（土）14:00〜（どちらか1日）」）を、かたまりごとの折り返さない箱にして入れる
+  // 切れ目：「・」のあと／日付の「）」と時刻のあいだ／「（どちらか1日）」「（いずれか1日）」の前
+  function setDates(el, text) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var parts = String(text || '')
+      .replace(/・/g, '・\u0000')
+      .replace(/）(\d{1,2}:\d{2})/g, '）\u0000$1')
+      .replace(/（(どちらか|いずれか)1日）/g, '\u0000（$11日）')
+      .split('\u0000');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var s = document.createElement('span');
+      s.className = 'nw';
+      s.textContent = parts[i];
+      el.appendChild(s);
+    }
+  }
+  function add(parent, tag, text, cls) {
+    var e = document.createElement(tag);
+    if (text !== undefined && text !== null) {
+      if (tag === 'p') setText(e, text);
+      else e.textContent = text;
+    }
+    if (cls) e.className = cls;
+    parent.appendChild(e);
+    return e;
+  }
+  (function () {
+    var ps = document.querySelectorAll('p');
+    for (var i = 0; i < ps.length; i++) {
+      if (ps[i].children.length === 0 && /[。、]/.test(ps[i].textContent)) setText(ps[i], ps[i].textContent);
+    }
+  })();
+  function showOnly(id) {
+    var ids = ['loading', 'message', 'form', 'receipt'];
+    for (var i = 0; i < ids.length; i++) $(ids[i]).hidden = ids[i] !== id;
+  }
+  function showMessage(text, canRetry) {
+    setText($('message-text'), text);
+    $('message-cls').hidden = true;
+    $('retry').hidden = !canRetry;
+    showOnly('message');
+  }
+  // 取り消した案内：決まった文と、教室の名前・電話だけ
+  function showCancelled(cls) {
+    setText($('message-text'), MSG_CANCELLED);
+    $('message-cls-name').textContent = (cls && cls.name) || '';
+    setTel($('message-cls-tel'), cls && cls.tel);
+    $('message-cls').hidden = !cls;
+    $('retry').hidden = true;
+    $('footer').hidden = true;
+    showOnly('message');
+    window.scrollTo(0, 0);
+  }
+  // 電話番号：押すとかけられる形（tel:）。番号の数字だけをリンク先に使う
+  function setTel(el, tel) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    var num = String(tel || '').replace(/[^0-9+]/g, '');
+    if (!tel || !num) return;
+    el.appendChild(document.createTextNode('電話 '));
+    var a = document.createElement('a');
+    a.href = 'tel:' + num;
+    a.textContent = String(tel);
+    el.appendChild(a);
+  }
+  function japaneseError(msg) {
+    if (typeof msg === 'string' && /[ぁ-んァ-ヶ一-龠]/.test(msg)) return msg;
+    return '送れませんでした。もう一度お試しください。';
+  }
+  function showFooter(cls) {
+    if (!cls) return;
+    $('cls-name').textContent = cls.name || '';
+    $('cls-address').textContent = cls.address || '';
+    setTel($('cls-tel'), cls.tel);
+    $('footer').hidden = false;
+  }
+  function call(url, opts, timeoutMs) {
+    opts = opts || {};
+    opts.credentials = 'omit';
+    opts.redirect = 'follow';
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    if (ctrl) opts.signal = ctrl.signal;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 30000) : null;
+    return fetch(url, opts).then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }, function (err) {
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
+  // 押し直しても同じ申込とわかる印（送る内容が変わったときに作り直す）
+  function newClientKey() {
+    var s = '';
+    var c = window.crypto && window.crypto.getRandomValues ? window.crypto : null;
+    var buf = c ? c.getRandomValues(new Uint8Array(24)) : null;
+    for (var i = 0; i < 24; i++) {
+      var n = buf ? buf[i] : Math.floor(Math.random() * 256);
+      s += ID_CHARS.charAt(n % ID_CHARS.length);
+    }
+    return 'p' + s;
+  }
+
+  // ===== 日付の文字（Logic.gs の moshiDayLabel_ などと同じ形。試しの案内だけで使う） =====
+  var WD = ['日', '月', '火', '水', '木', '金', '土'];
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function keyOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function dateOf(key) { var p = key.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function dayLabel(key) { var d = dateOf(key); return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WD[d.getDay()] + '）'; }
+  function shortLabel(key) { var d = dateOf(key); return (d.getMonth() + 1) + '/' + d.getDate() + '（' + WD[d.getDay()] + '）'; }
+  function datesText(dates) {
+    var sameTime = true;
+    for (var i = 1; i < dates.length; i++) if (dates[i].time !== dates[0].time) sameTime = false;
+    var tail = dates.length === 2 ? '（どちらか1日）' : dates.length >= 3 ? '（いずれか1日）' : '';
+    var parts = [];
+    for (var j = 0; j < dates.length; j++) parts.push(dayLabel(dates[j].key) + (sameTime ? '' : dates[j].time + '〜'));
+    return parts.join('・') + (sameTime ? dates[0].time + '〜' : '') + tail;
+  }
+  function atLabel(ms) {
+    var d = new Date(ms);
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WD[d.getDay()] + '）' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  function answerLabel(answer, dateKey) {
+    if (answer === EXAM) return '受験する ' + dayLabel(dateKey);
+    if (answer === UNDECIDED) return '日を相談したい';
+    return '辞退する';
+  }
+
+  // ===== 試し（?mock=1）。localStorage が使えなくても動く =====
+  function mockRead() {
+    try {
+      var s = window.localStorage.getItem(MOCK_KEY);
+      var o = s ? JSON.parse(s) : null;
+      if (!o || typeof o !== 'object') o = {};
+      if (!o.guides || typeof o.guides !== 'object') o.guides = {};
+      if (!Array.isArray(o.subs)) o.subs = [];
+      return o;
+    } catch (e) {
+      return { guides: {}, subs: [] };
+    }
+  }
+  function mockWrite(o) {
+    try { window.localStorage.setItem(MOCK_KEY, JSON.stringify(o)); } catch (e) { /* 使えなければ書かない */ }
+  }
+  // 組み込みの架空の案内（中3・受験日2つ・受験料4,200円）。日は今日から2週間あとの土曜と、その次の土曜
+  function builtinGuide() {
+    var d = new Date();
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 14);
+    while (d.getDay() !== 6) d.setDate(d.getDate() + 1);
+    var k1 = keyOf(d);
+    var k2 = keyOf(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7));
+    var dl = keyOf(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7));
+    var dates = [{ key: k1, time: '14:00' }, { key: k2, time: '14:00' }];
+    for (var i = 0; i < dates.length; i++) { dates[i].label = dayLabel(dates[i].key); dates[i].short = shortLabel(dates[i].key); }
+    var m = new Date(d.getFullYear(), d.getMonth() + 1, 1).getMonth() + 1;
+    return {
+      guide: {
+        name: '新・みやぎ模試・第3回9月号（試し）',
+        targetText: '中学3年生',
+        venue: '試し教室',
+        dates: dates,
+        datesText: datesText(dates),
+        feeLabel: '4,200円',
+        withdraw: m + '月末',
+        ret: m + '月中旬',
+        deadlineLabel: dayLabel(dl),
+        range: '既習範囲すべて',
+        timetable: '14:00 受付\n14:10 英語（50分）\n15:10 数学（50分）\n16:10 社会（50分）\n17:10 国語（50分）\n18:10 理科（50分）\n19:00 自己採点（30分・希望者のみ）',
+        recommendText: '県内でいちばん信頼される模試です。原則、受験をお願いします。'
+      },
+      cls: { name: '明光義塾 試し教室', address: '（試しの住所）', tel: '000-0000-0000' },
+      status: 'open'
+    };
+  }
+  function mockEntry(id) {
+    var o = mockRead();
+    var e = o.guides[id];
+    return e && e.guide ? e : builtinGuide();
+  }
+  function later(v) {
+    return new Promise(function (resolve) { setTimeout(function () { resolve(v); }, 300); });
+  }
+  function mockGet(id, forceCancelled) {
+    var e = mockEntry(id);
+    if (forceCancelled || e.status === 'cancelled') {
+      return later({ ok: true, status: 'cancelled', cls: { name: e.cls && e.cls.name, tel: e.cls && e.cls.tel } });
+    }
+    return later({ ok: true, status: 'open', id: id, guide: e.guide, cls: e.cls });
+  }
+  function mockSubmit(body, forceCancelled) {
+    var e = mockEntry(body.id);
+    if (forceCancelled || e.status === 'cancelled') {
+      return later({ ok: false, error: MSG_CANCELLED, cancelled: true, cls: { name: e.cls && e.cls.name, tel: e.cls && e.cls.tel } });
+    }
+    var name = trim(body.name);
+    var dateKey = body.answer === EXAM ? String(body.dateKey || '') : '';
+    var keys = [];
+    for (var i = 0; i < e.guide.dates.length; i++) keys.push(e.guide.dates[i].key);
+    var now = Date.now();
+    var receipt = function (s) { return { name: s.name, answerLabel: answerLabel(s.answer, s.dateKey), appliedAtLabel: atLabel(s.at) }; };
+    if (body.website) return later({ ok: true, receipt: receipt({ name: name, answer: body.answer, dateKey: dateKey, at: now }) });
+    var o = mockRead();
+    for (var j = 0; j < o.subs.length; j++) {
+      if (o.subs[j].id === body.id && o.subs[j].clientKey === body.clientKey) return later({ ok: true, receipt: receipt(o.subs[j]) });
+    }
+    if (name === '') return later({ ok: false, error: MSG_NO_NAME });
+    if (name.length > 40) return later({ ok: false, error: MSG_LONG_NAME });
+    if (!(body.answer === EXAM && keys.indexOf(dateKey) >= 0) && body.answer !== UNDECIDED && body.answer !== DECLINE) {
+      return later({ ok: false, error: MSG_NO_CHOICE });
+    }
+    var und = body.answer === UNDECIDED;
+    if (und && !wayOf(body.way)) return later({ ok: false, error: MSG_NO_WAY });
+    if (und && !decideText(body.decide)) return later({ ok: false, error: MSG_NO_DECIDE });
+    var wish = und && body.decide === '書く' ? trim(body.wish) : '';
+    if (und && body.decide === '書く' && wish === '') return later({ ok: false, error: MSG_NO_WISH });
+    if (wish.length > 100) return later({ ok: false, error: MSG_LONG_WISH });
+    var sub = { id: body.id, name: name, answer: body.answer, dateKey: dateKey, way: und ? body.way : '', decide: und ? body.decide : '', wish: wish,
+      at: now, clientKey: body.clientKey };
+    o.subs.push(sub);
+    mockWrite(o);
+    return later({ ok: true, receipt: receipt(sub) });
+  }
+
+  // ===== 控え =====
+  function renderReceipt(r, roundName, extra) {
+    extra = extra || {};
+    var box = $('receipt');
+    while (box.firstChild) box.removeChild(box.firstChild);
+    add(box, 'h2', '受け付けました。ありがとうございました。');
+    var ul = add(box, 'ul', null, 'receipt-list');
+    var rows = [['模試', roundName], ['お名前', r.name], ['選んだ内容', r.answerLabel],
+      ['ご希望の受け方', extra.way ? wayOf(extra.way).text : ''], ['日時の決め方', decideText(extra.decide)], ['ご希望の日時', extra.wish],
+      ['受け付けた日時', r.appliedAtLabel]];
+    for (var i = 0; i < rows.length; i++) {
+      if (!rows[i][1]) continue;
+      var li = add(ul, 'li');
+      add(li, 'span', rows[i][0], 'k');
+      add(li, 'span', rows[i][1], 'v');
+    }
+    add(box, 'p', 'この画面が控えです。必要なときは画面を保存してください。', 'small');
+    add(box, 'p', '変更・辞退は塾生アプリのメッセージでご連絡ください。', 'small');
+    showOnly('receipt');
+    window.scrollTo(0, 0);
+  }
+
+  // ===== 申込画面 =====
+  function renderForm(id, g, send) {
+    $('round').textContent = g.name || '';
+    var sum = $('summary');
+    // 1行目：対象、2行目：日時（かたまりの切れ目だけで折り返す）、3行目：会場／受験料／申込締切
+    while (sum.firstChild) sum.removeChild(sum.firstChild);
+    if (g.targetText) add(sum, 'span', g.targetText, 'line');
+    if (g.datesText) setDates(add(sum, 'span', null, 'line'), g.datesText);
+    var parts = [g.venue ? '会場 ' + g.venue : '', g.feeLabel ? '受験料 ' + g.feeLabel : '', g.deadlineLabel ? '申込締切 ' + g.deadlineLabel : ''];
+    parts = parts.filter(function (x) { return !!x; });
+    if (parts.length) {
+      var rest = add(sum, 'span', null, 'line');
+      for (var p = 0; p < parts.length; p++) add(rest, 'span', parts[p] + (p < parts.length - 1 ? '／' : ''), 's');
+    }
+
+    // 下にたたむ細かい所
+    var det = $('detail');
+    var items = [
+      ['会場', g.venue], ['日時', g.datesText], ['受験料', g.feeLabel ? g.feeLabel + '（税込）' : ''],
+      ['引き落とし', g.withdraw ? g.withdraw + 'に、ご登録の口座から引き落としいたします。' : ''],
+      ['データ集計・本人返却', g.ret ? g.ret + '予定' : ''],
+      ['範囲', g.range], ['時間割', g.timetable]
+    ];
+    for (var d = 0; d < items.length; d++) {
+      if (!items[d][1]) continue;
+      add(det, 'h3', items[d][0]);
+      if (items[d][0] === '時間割' || items[d][0] === '範囲') add(det, 'div', items[d][1], 'pre');
+      else if (items[d][0] === '日時') setDates(add(det, 'p', null), items[d][1]);
+      else add(det, 'p', items[d][1]);
+    }
+    // すすめの一文：時間割と線で分け、1文ずつ置く（「、」では切らず、文の中は自然に折り返す）
+    if (g.recommendText) {
+      var note = add(det, 'div', null, 'note');
+      var sents = String(g.recommendText).replace(/。/g, '。\u0000').split('\u0000');
+      for (var r = 0; r < sents.length; r++) if (trim(sents[r])) add(note, 'span', trim(sents[r]), 'sent');
+    }
+
+    // 選ぶボタン（受験日ごと＋日を相談したい＋辞退する）。1つだけ選べる
+    var box = $('choices');
+    var opts = [];
+    var dates = g.dates || [];
+    // 受験日の横に開始時刻も出す（例「受験する 12月27日（日）14:00〜」。本人 2026-11-23：時刻がないと問い合わせが来る）
+    for (var i = 0; i < dates.length; i++) opts.push({ answer: EXAM, dateKey: dates[i].key, text: '受験する ' + (dates[i].label || dayLabel(dates[i].key)) + (dates[i].time ? ' ' + dates[i].time + '〜' : ''), cls: 'opt exam' });
+    opts.push({ answer: UNDECIDED, dateKey: '', text: '日を相談したい', cls: 'opt' });
+    opts.push({ answer: DECLINE, dateKey: '', text: '辞退する', cls: 'opt' });
+    var picked = null;
+    var buttons = [];
+    opts.forEach(function (o, n) {
+      var b = add(box, 'button', o.text, o.cls);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', function () {
+        picked = o;
+        // 日を相談したいときだけ「ご希望の日時」の欄を出す（ほかを選び直したら隠して、中身は送らない）
+        wishBox.hidden = o.answer !== UNDECIDED;
+        for (var k = 0; k < buttons.length; k++) buttons[k].setAttribute('aria-pressed', k === n ? 'true' : 'false');
+        errorBox.hidden = true;
+      });
+      buttons.push(b);
+    });
+
+    var form = $('form');
+    var nameInput = $('studentName');
+    var hp = $('website');
+    var errorBox = $('error');
+    var wishBox = $('wish-box');
+    var wishInput = $('wish');
+    var wishWrite = $('wish-write');
+    var way = '', decide = '';
+    // 1つだけ選べる大きいボタンを並べる。sub は小さい説明
+    function choiceButtons(boxEl, list, onPick) {
+      var bs = [];
+      list.forEach(function (o, n) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'opt';
+        b.setAttribute('aria-pressed', 'false');
+        b.appendChild(document.createTextNode(o.text));
+        if (o.sub) { var s = document.createElement('span'); s.className = 'opt-sub'; s.textContent = o.sub; b.appendChild(s); }
+        b.addEventListener('click', function () {
+          for (var k = 0; k < bs.length; k++) bs[k].setAttribute('aria-pressed', k === n ? 'true' : 'false');
+          errorBox.hidden = true;
+          onPick(o.v);
+        });
+        boxEl.appendChild(b);
+        bs.push(b);
+      });
+    }
+    // 書く欄：受け方に合わせて見出し・時間の一言・例を変える。「教室で相談」のときは欄ごと出さない
+    function renderWrite() {
+      $('decide-step').hidden = !way;
+      wishWrite.hidden = !way || decide !== '書く';
+      var w = wayOf(way) || WAYS[0];
+      $('wish-label').textContent = w.label;
+      setText($('wish-hours'), w.hours);
+      wishInput.placeholder = w.ex;
+    }
+    // 次に選ぶ所が画面の下に隠れないよう、出したらそこまで送る
+    function bringIntoView(el) {
+      try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { el.scrollIntoView(false); }
+    }
+    choiceButtons($('way-choices'), WAYS, function (v) {
+      var first = !way;
+      way = v; renderWrite();
+      if (first) bringIntoView($('decide-step'));
+    });
+    choiceButtons($('decide-choices'), DECIDES, function (v) {
+      decide = v; renderWrite();
+      if (v === '書く') bringIntoView(wishWrite);
+    });
+    renderWrite();
+    var button = $('submit');
+    var clientKey = newClientKey();
+    var lastSig = null; // 前に送ろうとした内容。同じ内容の押し直しは同じ clientKey
+
+    function showError(msg) {
+      setText(errorBox, msg);
+      errorBox.hidden = false;
+    }
+    function ready() {
+      button.disabled = false;
+      button.textContent = '送る';
+    }
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (button.disabled) return;
+      errorBox.hidden = true;
+      var name = trim(nameInput.value);
+      if (name === '') return showError(MSG_NO_NAME);
+      if (name.length > 40) return showError(MSG_LONG_NAME);
+      if (!picked) return showError(MSG_NO_CHOICE);
+      var und = picked.answer === UNDECIDED;
+      if (und && !way) return showError(MSG_NO_WAY);
+      if (und && !decide) return showError(MSG_NO_DECIDE);
+      var wish = und && decide === '書く' ? trim(wishInput.value) : '';
+      if (und && decide === '書く' && wish === '') { showError(MSG_NO_WISH); wishInput.focus(); return; }
+      if (wish.length > 100) return showError(MSG_LONG_WISH);
+      var sendWay = und ? way : '', sendDecide = und ? decide : '';
+      var sig = [name, picked.answer, picked.dateKey, sendWay, sendDecide, wish].join('\u0000');
+      if (lastSig !== null && sig !== lastSig) clientKey = newClientKey();
+      lastSig = sig;
+
+      button.disabled = true;
+      button.textContent = '送っています…';
+      send({ api: 'moshiSubmit', id: id, name: name, answer: picked.answer, dateKey: picked.dateKey, way: sendWay, decide: sendDecide, wish: wish, website: hp.value, clientKey: clientKey })
+        .then(function (res) {
+          if (res && res.ok && res.receipt) {
+            renderReceipt(res.receipt, g.name, { way: sendWay, decide: sendDecide, wish: wish });
+          } else if (res && res.cancelled) {
+            showCancelled(res.cls);
+          } else {
+            showError(japaneseError(res && res.error));
+            ready();
+          }
+        }, function () {
+          showError(MSG_NETWORK);
+          ready();
+        });
+    });
+
+    showOnly('form');
+  }
+
+  // ===== はじめ：URL の id を整えて読み込む =====
+  var params = typeof URLSearchParams === 'function' ? new URLSearchParams(location.search) : null;
+  var mock = !!(params && params.get('mock') === '1');
+  var forceCancelled = mock && params.get('cancelled') === '1';
+  var raw = params ? params.get('id') : null;
+  var parsed = parseMoshiId(raw) || parseMoshiId(safeDecode(location.search + location.hash));
+  if (!parsed && mock && (raw === null || raw === '')) parsed = parseMoshiId(MOCK_DEFAULT_ID);
+  if (!parsed) {
+    showMessage(MSG_BAD_LINK, false);
+    return;
+  }
+  var id = parsed.id;
+
+  var getGuide = mock ? function () { return mockGet(id, forceCancelled); } : function () {
+    return call(API_URL + '?api=moshiGet&id=' + encodeURIComponent(id), { method: 'GET' });
+  };
+  var send = mock ? function (body) { return mockSubmit(body, forceCancelled); } : function (body) {
+    return call(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // preflight を起こさない
+      body: JSON.stringify(body)
+    }, 60000); // 送るときは鍵待ち・書きこみがあるので長めに待つ
+  };
+
+  getGuide().then(function (res) {
+    if (!res || !res.ok) {
+      if (res && res.error === 'notfound') showMessage(MSG_BAD_LINK, false);
+      else showMessage(MSG_UNAVAILABLE, true);
+      return;
+    }
+    if (res.status === 'cancelled') return showCancelled(res.cls);
+    if (res.status === 'open' && res.guide) {
+      showFooter(res.cls);
+      renderForm(res.id || id, res.guide, send);
+    } else {
+      showMessage(MSG_UNAVAILABLE, true);
+    }
+  }, function () {
+    showMessage(MSG_UNAVAILABLE, true);
+  });
+})();
+</script>
+</body>
+</html>
