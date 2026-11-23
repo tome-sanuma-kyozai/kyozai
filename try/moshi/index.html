@@ -290,7 +290,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
       throw err;
     });
   }
-  // 押し直しても同じ申込とわかる印（送る内容が変わったときと、きょうだいの分で作り直す）
+  // 押し直しても同じ申込とわかる印（送る内容が変わったときに作り直す）
   function newClientKey() {
     var s = '';
     var c = window.crypto && window.crypto.getRandomValues ? window.crypto : null;
@@ -416,7 +416,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
   }
 
   // ===== 控え =====
-  function renderReceipt(r, onSibling, roundName) {
+  function renderReceipt(r, roundName) {
     var box = $('receipt');
     while (box.firstChild) box.removeChild(box.firstChild);
     add(box, 'h2', '受け付けました。ありがとうございました。');
@@ -430,9 +430,6 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
     }
     add(box, 'p', 'この画面が控えです。必要なときは画面を保存してください。', 'small');
     add(box, 'p', '変更・辞退は塾生アプリのメッセージでご連絡ください。', 'small');
-    var b = add(box, 'button', 'きょうだいの分も申し込む', 'sub');
-    b.type = 'button';
-    b.addEventListener('click', onSibling);
     showOnly('receipt');
     window.scrollTo(0, 0);
   }
@@ -511,18 +508,6 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
       button.disabled = false;
       button.textContent = '送る';
     }
-    function sibling() {
-      nameInput.value = '';
-      picked = null; // 前の子の選んだ物は全部戻す
-      for (var k = 0; k < buttons.length; k++) buttons[k].setAttribute('aria-pressed', 'false');
-      clientKey = newClientKey();
-      lastSig = null;
-      errorBox.hidden = true;
-      ready();
-      showOnly('form');
-      window.scrollTo(0, 0);
-      nameInput.focus();
-    }
 
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
@@ -541,7 +526,7 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
       send({ api: 'moshiSubmit', id: id, name: name, answer: picked.answer, dateKey: picked.dateKey, website: hp.value, clientKey: clientKey })
         .then(function (res) {
           if (res && res.ok && res.receipt) {
-            renderReceipt(res.receipt, sibling, g.name);
+            renderReceipt(res.receipt, g.name);
           } else if (res && res.cancelled) {
             showCancelled(res.cls);
           } else {
