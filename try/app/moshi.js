@@ -583,7 +583,14 @@
         h('span', { class: 'spacer' }),
         h('span', { class: 'small muted', text: M.listTime ? M.listTime + ' に読みました' : '' })
       ]),
-      h('p', { class: 'small muted', style: 'margin:6px 0 0', text: '同じ回の名前の案内は1枚にまとめて数えます。数のタイルを押すと、その人だけを出します（もう一度押すと全員）。返事は▼で直せます（紙・メッセージで来た分もここ）。メモは欄の外を押すと保存します。' }),
+      h('p', { class: 'small muted', style: 'margin:6px 0 0', text: '同じ回の名前の案内は1枚にまとめて数えます。数のタイルを押すと、その人だけを出します（もう一度押すと全員）。返事の変更（紙・メッセージで来た分）はメモに残します。メモは欄の外を押すと保存します。' }),
+      h('div', { class: 'legend', 'aria-label': '色の意味' }, [
+        h('span', { class: 'c-red' }, [h('i', { class: 'sw' }), '赤：METISで請求を作る・請求を消す・締切すぎの未提出']),
+        h('span', { class: 'c-yellow' }, [h('i', { class: 'sw' }), '黄：名前が合わない申込']),
+        h('span', { class: 'c-green' }, [h('i', { class: 'sw' }), '緑：済み']),
+        h('span', { class: 'c-gray' }, [h('i', { class: 'sw' }), '灰：辞退・取り消し']),
+        h('span', { class: 'c-none' }, [h('i', { class: 'sw' }), '白：返事待ち'])
+      ]),
       msgEl(M.err, 'error')
     ]));
     if (!shown.length) {
@@ -648,23 +655,12 @@
     return h('section', { class: 'card mo-card' + (cancelled ? ' mo-cancelled' : ''), 'data-gid': grp.guides[0].id, 'data-group': grp.key }, kids);
   }
 
-  // 1行の▼・METIS・請求しない・メモは、その行の案内（g.id と row）に保存する
+  // 1行の METIS・請求しない・メモは、その行の案内（g.id と row）に保存する
   function rowsOf(grp, rows) {
     var out = rows.map(function (x) {
       var g = x.g, r = x.r;
-      var cancelled = g.status === '取り消し';
       var key = g.id + '|' + r.row;
-      // 返事の▼：その行の案内の受験日／日が未定／辞退（未提出のときは空）。選ぶと教室長の申込として保存（教室長の内容がいつも勝つ）
-      var opts = r.st.answer ? [] : [['', '（未提出）']];
-      g.dates.forEach(function (d) { opts.push(['受験|' + d.key, '受験 ' + d.short]); });
-      opts.push(['未定', '日が未定'], ['辞退', '辞退']);
-      var cur = r.st.answer === '受験' ? '受験|' + r.st.dateKey : r.st.answer;
-      var ans = select(opts, cur, function (val) {
-        if (!val) return;
-        var p = val.split('|');
-        queue(g.id, r.row, { answer: p[0], dateKey: p[1] || '' });
-      }, r.student + 'の返事', 'ans-' + key);
-      if (cancelled) ans.disabled = true;
+      // 返事は文字だけ（2026-11-23 本人：一覧で返事は変えない。変更はメモに残す）
       var check = function (k, label, patch) {
         return h('td', { class: 'hit-cell' }, [h('label', { class: 'hit', title: label }, [
           h('input', { type: 'checkbox', checked: !!r[k], 'aria-label': r.student + ' ' + label, 'data-k': k + '-' + key,
@@ -673,7 +669,9 @@
       return h('tr', { class: 'r c-' + r.view.color }, [
         h('td', null, [h('b', { text: r.student }), h('span', { class: 'mo-grade-s', text: r.grade }),
           r.st.count >= 2 ? h('span', { class: 'mo-two', text: r.st.count + '回来た' }) : null]),
-        h('td', { class: 'mo-ans-cell' }, [ans, r.st.by === '教室長' ? h('span', { class: 'mo-by', text: '教室長が入れた' }) : null,
+        h('td', { class: 'mo-ans-cell' }, [h('span', { class: 'mo-ans-text', text: r.view.label }),
+          // 2回来た・受験日のあとに届いた などは小さな札だけ（黄にしない）
+          r.st.check && r.st.check !== '2回来て中身が違う' ? h('span', { class: 'mo-two', text: r.st.check }) : null,
           r.st.answer === '未定' && moshiWishLine_(r.way, r.decide, r.wish) ? h('span', { class: 'mo-wish', text: moshiWishLine_(r.way, r.decide, r.wish) }) : null]),
         // METIS を外したときは「消した」の印も外す（請求後に辞退なら赤の札 → METISで消したら ☑ を外す）
         check('metis', 'METISで請求を作った', function (on) { return on ? { metis: true } : { metis: false, cleaned: false }; }),

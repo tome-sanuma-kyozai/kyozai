@@ -306,13 +306,13 @@ function moshiRowView_(st, f, g) {
   var label = a === '受験' ? '受験 ' + moshiShortLabel_(st.dateKey) : a === '未定' ? '日が未定' : a === '辞退' ? '辞退' : '未提出';
   var billLeft = f.metis === true && f.cleaned !== true;
   var color, next;
+  // 2026-11-23 本人の直し：一覧で返事を直さないので、行は黄（確かめて）・青（日を入れる）にしない。
+  // st.check（2回来て中身が違う・受験日のあとに届いた など）は画面で小さな札にするだけ。日が未定は受験と同じ扱い
   if (g.cancelled) {
     if (billLeft) { color = 'red'; next = 'METISの請求を消す'; } else { color = 'gray'; next = '取り消し'; }
-  } else if (st.check) { color = 'yellow'; next = '確かめて（' + st.check + '）'; }
-  else if (a === '辞退' && billLeft) { color = 'red'; next = 'METISの請求を消す'; }
+  } else if (a === '辞退' && billLeft) { color = 'red'; next = 'METISの請求を消す'; }
   else if ((a === '受験' || a === '未定') && f.metis !== true && f.noBill !== true) { color = 'red'; next = 'METISで請求を作る'; }
-  else if (a === '未定') { color = 'blue'; next = '日を入れる'; }
-  else if (a === '受験') { color = 'green'; next = '済み'; }
+  else if (a === '受験' || a === '未定') { color = 'green'; next = '済み'; }
   else if (a === '辞退') { color = 'gray'; next = '辞退'; }
   else if (g.deadlinePassed) { color = 'red'; next = '未提出（締切すぎ）'; }
   else { color = 'none'; next = '返事待ち'; }
