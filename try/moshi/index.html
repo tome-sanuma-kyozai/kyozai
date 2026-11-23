@@ -136,8 +136,11 @@
       <div id="wish-box" class="wish" hidden>
         <p class="field-label">1. ご希望の受け方を選んでください</p>
         <div id="way-choices"></div>
+        <!-- 2 は 1 を選んでから出す（選び忘れを防ぐ）。3 は 2 で「希望の日時を書く」を選んだときだけ -->
+        <div id="decide-step" hidden>
         <p class="field-label">2. 日時の決め方を選んでください</p>
         <div id="decide-choices"></div>
+        </div>
         <div id="wish-write" hidden>
           <label class="field-label" for="wish" id="wish-label">ご希望の日時</label>
           <p class="wish-ex" id="wish-hours"></p>
@@ -569,14 +572,26 @@ var API_URL = 'https://script.google.com/macros/s/AKfycbxa5UdPke6prhgvX597CdR3FP
     }
     // 書く欄：受け方に合わせて見出し・時間の一言・例を変える。「教室で相談」のときは欄ごと出さない
     function renderWrite() {
-      wishWrite.hidden = decide !== '書く';
+      $('decide-step').hidden = !way;
+      wishWrite.hidden = !way || decide !== '書く';
       var w = wayOf(way) || WAYS[0];
       $('wish-label').textContent = w.label;
       setText($('wish-hours'), w.hours);
       wishInput.placeholder = w.ex;
     }
-    choiceButtons($('way-choices'), WAYS, function (v) { way = v; renderWrite(); });
-    choiceButtons($('decide-choices'), DECIDES, function (v) { decide = v; renderWrite(); });
+    // 次に選ぶ所が画面の下に隠れないよう、出したらそこまで送る
+    function bringIntoView(el) {
+      try { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { el.scrollIntoView(false); }
+    }
+    choiceButtons($('way-choices'), WAYS, function (v) {
+      var first = !way;
+      way = v; renderWrite();
+      if (first) bringIntoView($('decide-step'));
+    });
+    choiceButtons($('decide-choices'), DECIDES, function (v) {
+      decide = v; renderWrite();
+      if (v === '書く') bringIntoView(wishWrite);
+    });
     renderWrite();
     var button = $('submit');
     var clientKey = newClientKey();
