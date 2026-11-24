@@ -432,7 +432,7 @@
       h('div', { class: 'row', style: 'margin-top:12px' }, [
         h('button', { type: 'button', class: 'btn-main', text: '送る文をコピー', 'data-k': 'copy', onclick: function () { copyRich(ta, cmsg); } }), cmsg]),
       // 2026-11-24 「お知らせ」に文字だけ貼るとリンクが押せなかった → リンクつきの形でもコピーする
-      h('p', { class: 'small', style: 'color:#b42318;font-weight:bold', text: '⚠ 塾生アプリの「お知らせ」に貼ったら、リンクが青い字（押せる形）になっているか見てから配信してください。なっていなければ、URLの字を選んで 🔗 を押し、同じURLを入れます。' }),
+      h('p', { class: 'small muted', text: 'このボタンでコピーすると、塾生アプリの「お知らせ」に貼ってもリンクが押せる形で入ります（個別チャットにもそのまま貼れます）。' }),
       redoBox(g)
     ]));
   }
