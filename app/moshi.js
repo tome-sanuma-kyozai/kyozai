@@ -431,7 +431,8 @@
       ta,
       h('div', { class: 'row', style: 'margin-top:12px' }, [
         h('button', { type: 'button', class: 'btn-main', text: '送る文をコピー', 'data-k': 'copy', onclick: function () { SH.copyText(ta, cmsg); } }), cmsg]),
-      h('p', { class: 'small muted', text: 'コピーした文を塾生アプリに貼り、学年を選んで保護者にまとめて送ります。' }),
+      // 2026-11-24 「お知らせ」で送るとリンクが押せなかった（個別チャットなら押せる）
+      h('p', { class: 'small', style: 'color:#b42318;font-weight:bold', text: '⚠ 塾生アプリの「個別チャット」で送ってください。「お知らせ」で送るとリンクが押せません。' }),
       redoBox(g)
     ]));
   }
