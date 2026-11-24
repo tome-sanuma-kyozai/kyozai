@@ -430,11 +430,37 @@
       h('p', { class: 'result-sum' }, [h('b', { text: '「' + g.name + '」を作りました' }), '（対象 ' + g.rows.length + '人）']),
       ta,
       h('div', { class: 'row', style: 'margin-top:12px' }, [
-        h('button', { type: 'button', class: 'btn-main', text: '送る文をコピー', 'data-k': 'copy', onclick: function () { SH.copyText(ta, cmsg); } }), cmsg]),
-      // 2026-11-24 「お知らせ」で送るとリンクが押せなかった（個別チャットなら押せる）
-      h('p', { class: 'small', style: 'color:#b42318;font-weight:bold', text: '⚠ 塾生アプリの「個別チャット」で送ってください。「お知らせ」で送るとリンクが押せません。' }),
+        h('button', { type: 'button', class: 'btn-main', text: '送る文をコピー', 'data-k': 'copy', onclick: function () { copyRich(ta, cmsg); } }), cmsg]),
+      // 2026-11-24 「お知らせ」に文字だけ貼るとリンクが押せなかった → リンクつきの形でもコピーする
+      h('p', { class: 'small', style: 'color:#b42318;font-weight:bold', text: '⚠ 塾生アプリの「お知らせ」に貼ったら、リンクが青い字（押せる形）になっているか見てから配信してください。なっていなければ、URLの字を選んで 🔗 を押し、同じURLを入れます。' }),
       redoBox(g)
     ]));
+  }
+  // 送る文をコピー：ふつうの文字（チャット用）と、リンクつきの形（お知らせの本文の欄に貼るとリンクになる）を両方入れる。
+  // リンクつきの形が使えないブラウザは、今までどおり文字だけ（SH.copyText）
+  function richHtml(text) {
+    var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+    return String(text).split('\n').map(function (line) {
+      if (!line) return '<p><br></p>';
+      var out = esc(line).replace(/https?:\/\/[^\s<]+/g, function (u) { return '<a href="' + u + '">' + u + '</a>'; });
+      return '<p>' + out + '</p>';
+    }).join('');
+  }
+  function copyRich(ta, msgEl) {
+    var text = ta.value;
+    if (!(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write)) { SH.copyText(ta, msgEl); return; }
+    var item;
+    try {
+      item = new window.ClipboardItem({
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+        'text/html': new Blob([richHtml(text)], { type: 'text/html' })
+      });
+    } catch (e) { SH.copyText(ta, msgEl); return; }
+    navigator.clipboard.write([item]).then(function () {
+      msgEl.textContent = 'コピーしました'; msgEl.className = 'msg ok'; msgEl.hidden = false;
+      if (msgEl._timer) clearTimeout(msgEl._timer);
+      msgEl._timer = setTimeout(function () { msgEl.hidden = true; }, 2000);
+    }, function () { SH.copyText(ta, msgEl); });
   }
   // 送る前に見つけたまちがいを直す：前の案内を取り消してから、入力を戻して直せるようにする
   function redoBox(g) {
